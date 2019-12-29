@@ -6,7 +6,7 @@ import pandas as pd
 import timeit
 from PIL import Image, ImageGrab, ImageOps
 import skimage
-from skimage import filters, morphology
+from skimage import filters, measure, morphology
 from sklearn.base import BaseEstimator
 from sklearn import model_selection
 
@@ -24,14 +24,16 @@ def cost(result, gt):
 def binarize_channel(data, threshold_function, correction_block_size):
     threshold = threshold_function(data)
     data = data > threshold
-    ubyte_data = skimage.img_as_ubyte(data)
-    ubyte_data[ubyte_data == 255] = 1
-    histograms = filters.rank.windowed_histogram(ubyte_data,
-                                                 morphology.square(correction_block_size),
-                                                 n_bins=2)
-    assert histograms.shape[2] == 2
-    white_background = histograms[:, :, 1] > 0.5
-    data = data == white_background
+    # background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
+    #                                        morphology.square(correction_block_size))
+    labels, num_labels = measure.label(data, background=-1, return_num=True)
+    label_colors = np.zeros(num_labels + 1, np.bool_)
+    label_colors[labels] = data
+    background_labels = filters.rank.modal(labels.astype(np.uint16, copy=False),
+                                           morphology.square(correction_block_size))
+    background_colors = label_colors[background_labels]
+    # Make the background consistently white (True).
+    data = data == background_colors
     return data
 
 
@@ -97,13 +99,13 @@ image_path = r"C:\Users\james\Documents\OCR\pillow_docs_cropped.png"
 image = Image.open(image_path).convert("RGB")  # .crop(bounding_box)
 # image = ImageGrab.grab(bounding_box)
 
-# # Preprocess the image.
-# block_size = 51
-# threshold_function = lambda data: filters.threshold_local(data, block_size)
-# margin = 10
-# resize_factor = 4
-# preprocessing_time = timeit.timeit("global preprocessed_image; preprocessed_image = preprocess(image, threshold_function, block_size, margin, resize_factor)", globals=globals(), number=1)
-# preprocessed_image.save(r"C:\Users\james\Documents\OCR\debug.png")
+# Preprocess the image.
+block_size = 51
+threshold_function = lambda data: filters.threshold_local(data, block_size)
+margin = 10
+resize_factor = 4
+preprocessing_time = timeit.timeit("global preprocessed_image; preprocessed_image = preprocess(image, threshold_function, block_size, margin, resize_factor)", globals=globals(), number=1)
+preprocessed_image.save(r"C:\Users\james\Documents\OCR\debug.png")
 
 # Load ground truth.
 gt_path = r"C:\Users\james\Documents\OCR\pillow_docs_cropped_gt.txt"
@@ -116,34 +118,34 @@ data_path = r"C:\Program Files\Tesseract-OCR\tessdata"
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 tessdata_dir_config = r'--tessdata-dir "{}"'.format(data_path)
 with PyTessBaseAPI(path=data_path) as api:
-    # native_string = None
-    # native_time = timeit.timeit("global native_string; native_string = native_image_to_string(api, preprocessed_image)", globals=globals(), number=1)
-    # native_cost = cost(native_string, gt_string)
-    # binary_string = None
-    # binary_time = timeit.timeit("global binary_string; binary_string = pytesseract.image_to_string(preprocessed_image, config=tessdata_dir_config)", globals=globals(), number=1)
-    # binary_cost = cost(binary_string, gt_string)
-    # print(native_string)
-    # print("------------------")
-    # print(binary_string)
-    # print("preprocessing time: {:f}".format(preprocessing_time))
-    # print("native\ttime: {:.2f}\tcost: {:.2f}".format(native_time, native_cost))
-    # print("binary\ttime: {:.2f}\tcost: {:.2f}".format(binary_time, binary_cost))
+    native_string = None
+    native_time = timeit.timeit("global native_string; native_string = native_image_to_string(api, preprocessed_image)", globals=globals(), number=1)
+    native_cost = cost(native_string, gt_string)
+    binary_string = None
+    binary_time = timeit.timeit("global binary_string; binary_string = pytesseract.image_to_string(preprocessed_image, config=tessdata_dir_config)", globals=globals(), number=1)
+    binary_cost = cost(binary_string, gt_string)
+    print(native_string)
+    print("------------------")
+    print(binary_string)
+    print("preprocessing time: {:f}".format(preprocessing_time))
+    print("native\ttime: {:.2f}\tcost: {:.2f}".format(native_time, native_cost))
+    print("binary\ttime: {:.2f}\tcost: {:.2f}".format(binary_time, binary_cost))
 
-    X = [image]
-    y = [gt_string]
-    grid_search = model_selection.GridSearchCV(
-        OcrEstimator(),
-        {
-            "threshold_type": ["local", "niblack", "sauvola"],
-            "threshold_block_size": [41, 51, 61],
-            "correction_block_size": [41, 51, 61],
-            "margin": [10],
-            "resize_factor": [4],
-        },
-        cv=model_selection.PredefinedSplit([0] * len(y))
-    )
-    grid_search.fit(X, y)
-    results = pd.DataFrame(grid_search.cv_results_)
-    results.set_index("params", inplace=True)
-    print(results["mean_test_score"].sort_values(ascending=False))
-    print(grid_search.best_params_)
+    # X = [image]
+    # y = [gt_string]
+    # grid_search = model_selection.GridSearchCV(
+    #     OcrEstimator(),
+    #     {
+    #         "threshold_type": ["local", "niblack", "sauvola"],
+    #         "threshold_block_size": [41, 51, 61],
+    #         "correction_block_size": [41, 51, 61],
+    #         "margin": [10],
+    #         "resize_factor": [4],
+    #     },
+    #     cv=model_selection.PredefinedSplit([0] * len(y))
+    # )
+    # grid_search.fit(X, y)
+    # results = pd.DataFrame(grid_search.cv_results_)
+    # results.set_index("params", inplace=True)
+    # print(results["mean_test_score"].sort_values(ascending=False))
+    # print(grid_search.best_params_)
