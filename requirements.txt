@@ -4,3 +4,5 @@ tesserocr
 weighted-levenshtein
 numpy
 scikit-image
+scikit-learn
+pandas
