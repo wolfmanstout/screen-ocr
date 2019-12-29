@@ -1,0 +1,6 @@
+pillow
+pytesseract
+tesserocr
+weighted-levenshtein
+numpy
+scikit-image
