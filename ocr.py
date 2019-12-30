@@ -1,3 +1,4 @@
+import os
 from tesserocr import PyTessBaseAPI
 import pytesseract
 from weighted_levenshtein import lev
@@ -21,7 +22,18 @@ def cost(result, gt):
     return lev(result.encode("ascii", errors="ignore"), gt, delete_costs=delete_costs)
 
 
-def binarize_channel(data, threshold_function, correction_block_size):
+def binarize_channel(data, channel_index, threshold_function, correction_block_size):
+    Image.fromarray(data).save("debug_before_{}.png".format(channel_index))
+    # Shift each channel based on actual position in a typical LCD. This reduces
+    # artifacts from subpixel rendering. Note that this assumes RGB
+    # left-to-right ordering and a subpixel size of 1 in the resized image.
+    channel_shift = channel_index - 1
+    if channel_shift != 0:
+        data = np.roll(data, channel_shift, axis=1)
+        if channel_shift == -1:
+            data[:, -1] = data[:, -2]
+        elif channel_shift == 1:
+            data[:, 0] = data[:, 1]
     threshold = threshold_function(data)
     data = data > threshold
     # background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
@@ -34,20 +46,22 @@ def binarize_channel(data, threshold_function, correction_block_size):
     background_colors = label_colors[background_labels]
     # Make the background consistently white (True).
     data = data == background_colors
+    Image.fromarray(data).save("debug_after_{}.png".format(channel_index))
     return data
 
 
 def preprocess(image, threshold_function, correction_block_size, margin, resize_factor):
-    image = ImageOps.expand(image, margin, "white")
     new_size = (image.size[0] * resize_factor, image.size[1] * resize_factor)
     image = image.resize(new_size, Image.NEAREST)
+    image.save("debug_resized.png")
     
     data = np.array(image)
-    channels = [binarize_channel(data[:, :, i], threshold_function, correction_block_size)
+    channels = [binarize_channel(data[:, :, i], i, threshold_function, correction_block_size)
                 for i in range(3)]
     data = np.stack(channels, axis=-1)
     data = np.all(data, axis=-1)
     image = Image.fromarray(data)
+    image = ImageOps.expand(image, margin, "white")
 
     image.load()
     return image
@@ -93,22 +107,24 @@ class OcrEstimator(BaseEstimator):
         return -error
             
 
+os.chdir(r"C:\Users\james\Documents\OCR")
+
 # Load image and crop.
 # bounding_box = (0, 0, 200, 200)
-image_path = r"C:\Users\james\Documents\OCR\pillow_docs_cropped.png"
+image_path = "pillow_docs_cropped.png"
 image = Image.open(image_path).convert("RGB")  # .crop(bounding_box)
 # image = ImageGrab.grab(bounding_box)
 
 # Preprocess the image.
 block_size = 51
 threshold_function = lambda data: filters.threshold_local(data, block_size)
-margin = 10
+margin = 40
 resize_factor = 4
 preprocessing_time = timeit.timeit("global preprocessed_image; preprocessed_image = preprocess(image, threshold_function, block_size, margin, resize_factor)", globals=globals(), number=1)
-preprocessed_image.save(r"C:\Users\james\Documents\OCR\debug.png")
+preprocessed_image.save("debug.png")
 
 # Load ground truth.
-gt_path = r"C:\Users\james\Documents\OCR\pillow_docs_cropped_gt.txt"
+gt_path = "pillow_docs_cropped_gt.txt"
 with open(gt_path, "r") as gt_file:
     gt_string = gt_file.read()
 
@@ -139,7 +155,7 @@ with PyTessBaseAPI(path=data_path) as api:
     #         "threshold_type": ["local", "niblack", "sauvola"],
     #         "threshold_block_size": [41, 51, 61],
     #         "correction_block_size": [41, 51, 61],
-    #         "margin": [10],
+    #         "margin": [40],
     #         "resize_factor": [4],
     #     },
     #     cv=model_selection.PredefinedSplit([0] * len(y))
