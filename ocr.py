@@ -1,10 +1,12 @@
 import os
+import glob
+import timeit
+
 from tesserocr import PyTessBaseAPI
 import pytesseract
 from weighted_levenshtein import lev
 import numpy as np
 import pandas as pd
-import timeit
 from PIL import Image, ImageGrab, ImageOps
 import skimage
 from skimage import filters, measure, morphology
@@ -21,9 +23,7 @@ def cost(result, gt):
     # lev() appears to require ASCII encoding.
     return lev(result.encode("ascii", errors="ignore"), gt, delete_costs=delete_costs)
 
-
-def binarize_channel(data, channel_index, threshold_function, correction_block_size):
-    Image.fromarray(data).save("debug_before_{}.png".format(channel_index))
+def shift_channel(data, channel_index):
     # Shift each channel based on actual position in a typical LCD. This reduces
     # artifacts from subpixel rendering. Note that this assumes RGB
     # left-to-right ordering and a subpixel size of 1 in the resized image.
@@ -34,6 +34,11 @@ def binarize_channel(data, channel_index, threshold_function, correction_block_s
             data[:, -1] = data[:, -2]
         elif channel_shift == 1:
             data[:, 0] = data[:, 1]
+    return data
+
+
+def binarize_channel(data, channel_index, threshold_function, correction_block_size):
+    Image.fromarray(data).save("debug_before_{}.png".format(channel_index))
     threshold = threshold_function(data)
     data = data > threshold
     # background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
@@ -50,19 +55,37 @@ def binarize_channel(data, channel_index, threshold_function, correction_block_s
     return data
 
 
-def preprocess(image, threshold_function, correction_block_size, margin, resize_factor):
+def preprocess(image,
+               threshold_function,
+               correction_block_size,
+               margin,
+               resize_factor,
+               convert_grayscale,
+               shift_channels):
     new_size = (image.size[0] * resize_factor, image.size[1] * resize_factor)
     image = image.resize(new_size, Image.NEAREST)
     image.save("debug_resized.png")
-    
-    data = np.array(image)
-    channels = [binarize_channel(data[:, :, i], i, threshold_function, correction_block_size)
-                for i in range(3)]
-    data = np.stack(channels, axis=-1)
-    data = np.all(data, axis=-1)
-    image = Image.fromarray(data)
-    image = ImageOps.expand(image, margin, "white")
 
+    data = np.array(image)
+    if shift_channels:
+        channels = [shift_channel(data[:, :, i], i) for i in range(3)]
+        data = np.stack(channels, axis=-1)
+
+    if convert_grayscale:
+        image = Image.fromarray(data)
+        image = image.convert("L")
+        data = np.array(image)
+        data = binarize_channel(data, None, threshold_function, correction_block_size)
+        image = Image.fromarray(data)
+    else:
+        channels = [binarize_channel(data[:, :, i], i, threshold_function, correction_block_size)
+                    for i in range(3)]
+        data = np.stack(channels, axis=-1)
+        data = np.all(data, axis=-1)
+        image = Image.fromarray(data)
+
+    image = ImageOps.expand(image, margin, "white")
+    # Ensure consistent performance measurements.
     image.load()
     return image
 
@@ -108,6 +131,8 @@ class OcrEstimator(BaseEstimator):
             
 
 os.chdir(r"C:\Users\james\Documents\OCR")
+for debug_image in glob.glob("debug*.png"):
+  os.remove(debug_image)
 
 # Load image and crop.
 # bounding_box = (0, 0, 200, 200)
@@ -119,8 +144,10 @@ image = Image.open(image_path).convert("RGB")  # .crop(bounding_box)
 block_size = 51
 threshold_function = lambda data: filters.threshold_local(data, block_size)
 margin = 40
-resize_factor = 4
-preprocessing_time = timeit.timeit("global preprocessed_image; preprocessed_image = preprocess(image, threshold_function, block_size, margin, resize_factor)", globals=globals(), number=1)
+resize_factor = 3
+convert_grayscale = True
+shift_channels = True
+preprocessing_time = timeit.timeit("global preprocessed_image; preprocessed_image = preprocess(image, threshold_function, block_size, margin, resize_factor, convert_grayscale, shift_channels)", globals=globals(), number=1)
 preprocessed_image.save("debug.png")
 
 # Load ground truth.
