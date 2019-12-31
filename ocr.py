@@ -37,18 +37,20 @@ def shift_channel(data, channel_index):
     return data
 
 
-def binarize_channel(data, channel_index, threshold_function, correction_block_size):
+def binarize_channel(data, channel_index, threshold_function, correction_block_size, label_components):
     Image.fromarray(data).save("debug_before_{}.png".format(channel_index))
     threshold = threshold_function(data)
     data = data > threshold
-    # background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
-    #                                        morphology.square(correction_block_size))
-    labels, num_labels = measure.label(data, background=-1, return_num=True)
-    label_colors = np.zeros(num_labels + 1, np.bool_)
-    label_colors[labels] = data
-    background_labels = filters.rank.modal(labels.astype(np.uint16, copy=False),
-                                           morphology.square(correction_block_size))
-    background_colors = label_colors[background_labels]
+    if label_components:
+        labels, num_labels = measure.label(data, background=-1, return_num=True)
+        label_colors = np.zeros(num_labels + 1, np.bool_)
+        label_colors[labels] = data
+        background_labels = filters.rank.modal(labels.astype(np.uint16, copy=False),
+                                               morphology.square(correction_block_size))
+        background_colors = label_colors[background_labels]
+    else:
+        background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
+                                               morphology.square(correction_block_size))
     # Make the background consistently white (True).
     data = data == background_colors
     Image.fromarray(data).save("debug_after_{}.png".format(channel_index))
@@ -61,7 +63,8 @@ def preprocess(image,
                margin,
                resize_factor,
                convert_grayscale,
-               shift_channels):
+               shift_channels,
+               label_components):
     new_size = (image.size[0] * resize_factor, image.size[1] * resize_factor)
     image = image.resize(new_size, Image.NEAREST)
     image.save("debug_resized.png")
@@ -75,10 +78,18 @@ def preprocess(image,
         image = Image.fromarray(data)
         image = image.convert("L")
         data = np.array(image)
-        data = binarize_channel(data, None, threshold_function, correction_block_size)
+        data = binarize_channel(data,
+                                None,
+                                threshold_function,
+                                correction_block_size,
+                                label_components)
         image = Image.fromarray(data)
     else:
-        channels = [binarize_channel(data[:, :, i], i, threshold_function, correction_block_size)
+        channels = [binarize_channel(data[:, :, i],
+                                     i,
+                                     threshold_function,
+                                     correction_block_size,
+                                     label_components)
                     for i in range(3)]
         data = np.stack(channels, axis=-1)
         data = np.all(data, axis=-1)
@@ -135,9 +146,9 @@ for debug_image in glob.glob("debug*.png"):
   os.remove(debug_image)
 
 # Load image and crop.
-# bounding_box = (0, 0, 200, 200)
-image_path = "pillow_docs_cropped.png"
-image = Image.open(image_path).convert("RGB")  # .crop(bounding_box)
+bounding_box = (0, 0, 200, 200)
+image_path = "pillow_docs.png"
+image = Image.open(image_path).convert("RGB").crop(bounding_box)
 # image = ImageGrab.grab(bounding_box)
 
 # Preprocess the image.
@@ -147,7 +158,8 @@ margin = 40
 resize_factor = 3
 convert_grayscale = True
 shift_channels = True
-preprocessing_time = timeit.timeit("global preprocessed_image; preprocessed_image = preprocess(image, threshold_function, block_size, margin, resize_factor, convert_grayscale, shift_channels)", globals=globals(), number=1)
+label_components = True
+preprocessing_time = timeit.timeit("global preprocessed_image; preprocessed_image = preprocess(image, threshold_function, block_size, margin, resize_factor, convert_grayscale, shift_channels, label_components)", globals=globals(), number=1)
 preprocessed_image.save("debug.png")
 
 # Load ground truth.
