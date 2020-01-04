@@ -9,9 +9,10 @@ import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw, ImageGrab, ImageOps
 import skimage
-from skimage import filters, measure, morphology
+from skimage import filters, measure, morphology, transform
 from sklearn.base import BaseEstimator
 from sklearn import model_selection
+
 
 def native_image_to_string(image, api):
     api.SetImage(image)
@@ -81,6 +82,26 @@ def cost(result, gt):
     # lev() appears to require ASCII encoding.
     return lev(result.encode("ascii", errors="ignore"), gt, delete_costs=delete_costs)
 
+
+def window_sums(image, window_size):
+    integral = transform.integral_image(image)
+    radius = int((window_size - 1) / 2)
+    top_left = np.zeros(image.shape, dtype=np.uint16)
+    top_left[radius:, radius:] = integral[:-radius, :-radius]
+    top_right = np.zeros(image.shape, dtype=np.uint16)
+    top_right[radius:, :-radius] = integral[:-radius, radius:]
+    top_right[radius:, -radius:] = integral[:-radius, -1:]
+    bottom_left = np.zeros(image.shape, dtype=np.uint16)
+    bottom_left[:-radius, radius:] = integral[radius:, :-radius]
+    bottom_left[-radius:, radius:] = integral[-1:, :-radius]
+    bottom_right = np.zeros(image.shape, dtype=np.uint16)
+    bottom_right[:-radius, :-radius] = integral[radius:, radius:]
+    bottom_right[-radius:, :-radius] = integral[-1:, radius:]
+    bottom_right[:-radius, -radius:] = integral[radius:, -1:]
+    bottom_right[-radius:, -radius:] = integral[-1, -1]
+    return bottom_right - bottom_left - top_right + top_left
+
+
 def shift_channel(data, channel_index):
     # Shift each channel based on actual position in a typical LCD. This reduces
     # artifacts from subpixel rendering. Note that this assumes RGB
@@ -99,7 +120,7 @@ def binarize_channel(data, channel_index, threshold_function, correction_block_s
     Image.fromarray(data).save("debug_before_{}.png".format(channel_index))
     threshold = threshold_function(data)
     if threshold.ndim == 2:
-        Image.fromarray(threshold).save("debug_threshold_{}.png".format(channel_index))
+        Image.fromarray(threshold.astype(np.uint8)).save("debug_threshold_{}.png".format(channel_index))
     else:
         Image.fromarray(np.ones_like(data) * threshold).save("debug_threshold_{}.png".format(channel_index))
     data = data > threshold
@@ -111,8 +132,11 @@ def binarize_channel(data, channel_index, threshold_function, correction_block_s
                                                morphology.square(correction_block_size))
         background_colors = label_colors[background_labels]
     else:
-        background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
-                                               morphology.square(correction_block_size))
+        white_sums = window_sums(data, correction_block_size)
+        black_sums = window_sums(~data, correction_block_size)
+        background_colors = white_sums > black_sums
+        # background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
+        #                                        morphology.square(correction_block_size))
         Image.fromarray(background_colors == True).save("debug_background_{}.png".format(channel_index))
     # Make the background consistently white (True).
     data = data == background_colors
@@ -208,7 +232,7 @@ class OcrEstimator(BaseEstimator):
                                label_components=self.label_components)
             # Assume "api" is set globally. This is easier than making it a
             # param because it does not support deepcopy.
-            result = native_image_to_string(image, api)
+            result = binary_image_to_string(image, tessdata_dir_config)
             error += cost(result, gt_text)
         return -error
             
@@ -225,8 +249,8 @@ image = Image.open(image_path).convert("RGB") #.crop(bounding_box)
 
 # Preprocess the image.
 block_size = 61
-threshold_function = lambda data: filters.threshold_otsu(data)
-# threshold_function = lambda data: filters.rank.otsu(data, morphology.square(2000))
+# threshold_function = lambda data: filters.threshold_otsu(data)
+threshold_function = lambda data: filters.rank.otsu(data, morphology.square(block_size))
 margin = 40
 resize_factor = 3
 convert_grayscale = True
