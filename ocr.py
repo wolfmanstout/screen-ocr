@@ -2,20 +2,78 @@ import os
 import glob
 import timeit
 
-from tesserocr import PyTessBaseAPI
+from tesserocr import PyTessBaseAPI, RIL
 import pytesseract
 from weighted_levenshtein import lev
 import numpy as np
 import pandas as pd
-from PIL import Image, ImageGrab, ImageOps
+from PIL import Image, ImageDraw, ImageGrab, ImageOps
 import skimage
 from skimage import filters, measure, morphology
 from sklearn.base import BaseEstimator
 from sklearn import model_selection
 
-def native_image_to_string(api, image):
+def native_image_to_string(image, api):
     api.SetImage(image)
-    return api.GetUTF8Text()
+    # return api.GetUTF8Text()
+    debug_image = image.convert("RGB")
+    draw = ImageDraw.Draw(debug_image)
+    result = ""
+    boxes = api.GetComponentImages(RIL.TEXTLINE, True)
+    boxes = sorted(boxes, key=lambda box: (box[1]["y"], box[1]["x"]))
+    text_lines = []
+    for _, box, _, _ in boxes:
+        api.SetRectangle(box["x"], box["y"], box["w"], box["h"])
+        # if api.MeanTextConf() < 50:
+        #     continue
+        draw.line([box["x"], box["y"],
+                   box["x"] + box["w"], box["y"],
+                   box["x"] + box["w"], box["y"] + box["h"],
+                   box["x"], box["y"] + box["h"],
+                   box["x"], box["y"]],
+                  fill=(255 - (api.MeanTextConf() * 255 // 100), api.MeanTextConf() * 255 // 100, 0),
+                  width=4)
+        text_lines.append(api.GetUTF8Text())
+    del draw
+    debug_image.save("debug_boxes_native.png")
+    return "".join(text_lines)
+
+
+def binary_image_to_string(image, config):
+    # return pytesseract.image_to_string(image, config=config)
+    debug_image = image.convert("RGB")
+    draw = ImageDraw.Draw(debug_image)
+    result = ""
+    boxes = pytesseract.image_to_data(image, config=config, output_type=pytesseract.Output.DATAFRAME)
+    lines = []
+    words = []
+    for _, box in boxes.iterrows():
+        if box.level == 4:
+            if words:
+                line_box.text = " ".join(words)
+                lines.append(line_box)
+            words = []
+            line_box = box
+        if box.level == 5:
+            words.append(box.text)
+    if words:
+        line_box.text = " ".join(words)
+        lines.append(line_box)
+    line_boxes = pd.DataFrame(lines)
+    line_boxes.sort_values(by=["top", "left"])
+    text_lines = []
+    for box in line_boxes.itertuples():
+        draw.line([box.left, box.top,
+                   box.left + box.width, box.top,
+                   box.left + box.width, box.top + box.height,
+                   box.left, box.top + box.height,
+                   box.left, box.top],
+                  fill=(255 - (box.conf * 255 // 100), box.conf * 255 // 100, 0),
+                  width=4)
+        text_lines.append(box.text)
+    del draw
+    debug_image.save("debug_boxes_binary.png")
+    return "\n".join(text_lines)
 
 
 delete_costs = np.ones(128, dtype=np.float64) * 0.1
@@ -40,6 +98,10 @@ def shift_channel(data, channel_index):
 def binarize_channel(data, channel_index, threshold_function, correction_block_size, label_components):
     Image.fromarray(data).save("debug_before_{}.png".format(channel_index))
     threshold = threshold_function(data)
+    if threshold.ndim == 2:
+        Image.fromarray(threshold).save("debug_threshold_{}.png".format(channel_index))
+    else:
+        Image.fromarray(np.ones_like(data) * threshold).save("debug_threshold_{}.png".format(channel_index))
     data = data > threshold
     if label_components:
         labels, num_labels = measure.label(data, background=-1, return_num=True)
@@ -51,6 +113,7 @@ def binarize_channel(data, channel_index, threshold_function, correction_block_s
     else:
         background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
                                                morphology.square(correction_block_size))
+        Image.fromarray(background_colors == True).save("debug_background_{}.png".format(channel_index))
     # Make the background consistently white (True).
     data = data == background_colors
     Image.fromarray(data).save("debug_after_{}.png".format(channel_index))
@@ -145,7 +208,7 @@ class OcrEstimator(BaseEstimator):
                                label_components=self.label_components)
             # Assume "api" is set globally. This is easier than making it a
             # param because it does not support deepcopy.
-            result = native_image_to_string(api, image)
+            result = native_image_to_string(image, api)
             error += cost(result, gt_text)
         return -error
             
@@ -161,10 +224,11 @@ image = Image.open(image_path).convert("RGB") #.crop(bounding_box)
 # image = ImageGrab.grab(bounding_box)
 
 # Preprocess the image.
-block_size = 51
-threshold_function = lambda data: filters.rank.otsu(data, morphology.square(block_size))
+block_size = 61
+threshold_function = lambda data: filters.threshold_otsu(data)
+# threshold_function = lambda data: filters.rank.otsu(data, morphology.square(2000))
 margin = 40
-resize_factor = 4
+resize_factor = 3
 convert_grayscale = True
 shift_channels = True
 label_components = False
@@ -183,10 +247,10 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 tessdata_dir_config = r'--tessdata-dir "{}"'.format(data_path)
 with PyTessBaseAPI(path=data_path) as api:
     # native_string = None
-    # native_time = timeit.timeit("global native_string; native_string = native_image_to_string(api, preprocessed_image)", globals=globals(), number=1)
+    # native_time = timeit.timeit("global native_string; native_string = native_image_to_string(preprocessed_image, api)", globals=globals(), number=1)
     # native_cost = cost(native_string, gt_string)
     # binary_string = None
-    # binary_time = timeit.timeit("global binary_string; binary_string = pytesseract.image_to_string(preprocessed_image, config=tessdata_dir_config)", globals=globals(), number=1)
+    # binary_time = timeit.timeit("global binary_string; binary_string = binary_image_to_string(preprocessed_image, tessdata_dir_config)", globals=globals(), number=1)
     # binary_cost = cost(binary_string, gt_string)
     # with open("debug_native.txt", "w") as file:
     #     file.write(native_string)
@@ -204,7 +268,7 @@ with PyTessBaseAPI(path=data_path) as api:
     grid_search = model_selection.GridSearchCV(
         OcrEstimator(),
         {
-            "threshold_type": ["otsu", "local_otsu", "local", "niblack", "sauvola"],
+            "threshold_type": ["otsu", "local_otsu", "local"],  # , "niblack", "sauvola"],
             "block_size": [51, 61, 71],
             "margin": [40],
             "resize_factor": [3, 4],
