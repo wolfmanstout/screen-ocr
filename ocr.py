@@ -13,7 +13,7 @@ from sklearn.base import BaseEstimator
 from sklearn import model_selection
 
 
-def native_image_to_string(image, api):
+def native_image_to_string(image, api, save_debug_images):
     api.SetImage(image)
     # return api.GetUTF8Text()
     debug_image = image.convert("RGB")
@@ -35,11 +35,12 @@ def native_image_to_string(image, api):
                   width=4)
         text_lines.append(api.GetUTF8Text())
     del draw
-    debug_image.save("debug_boxes_native.png")
+    if save_debug_images:
+        debug_image.save("debug_boxes_native.png")
     return "".join(text_lines)
 
 
-def binary_image_to_string(image, config):
+def binary_image_to_string(image, config, save_debug_images):
     # return pytesseract.image_to_string(image, config=config)
     debug_image = image.convert("RGB")
     draw = ImageDraw.Draw(debug_image)
@@ -76,7 +77,8 @@ def binary_image_to_string(image, config):
                   width=4)
         text_lines.append(box.text)
     del draw
-    debug_image.save("debug_boxes_binary.png")
+    if save_debug_images:
+        debug_image.save("debug_boxes_binary.png")
     return "\n".join(text_lines)
 
 
@@ -119,13 +121,15 @@ def shift_channel(data, channel_index):
     return data
 
 
-def binarize_channel(data, channel_index, threshold_function, correction_block_size, label_components):
-    Image.fromarray(data).save("debug_before_{}.png".format(channel_index))
+def binarize_channel(data, channel_index, threshold_function, correction_block_size, label_components, save_debug_images):
+    if save_debug_images:
+        Image.fromarray(data).save("debug_before_{}.png".format(channel_index))
     threshold = threshold_function(data)
-    if threshold.ndim == 2:
-        Image.fromarray(threshold.astype(np.uint8)).save("debug_threshold_{}.png".format(channel_index))
-    else:
-        Image.fromarray(np.ones_like(data) * threshold).save("debug_threshold_{}.png".format(channel_index))
+    if save_debug_images:
+        if threshold.ndim == 2:
+            Image.fromarray(threshold.astype(np.uint8)).save("debug_threshold_{}.png".format(channel_index))
+        else:
+            Image.fromarray(np.ones_like(data) * threshold).save("debug_threshold_{}.png".format(channel_index))
     data = data > threshold
     if label_components:
         labels, num_labels = measure.label(data, background=-1, return_num=True)
@@ -140,10 +144,12 @@ def binarize_channel(data, channel_index, threshold_function, correction_block_s
         background_colors = white_sums > black_sums
         # background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
         #                                        morphology.square(correction_block_size))
+    if save_debug_images:
         Image.fromarray(background_colors == True).save("debug_background_{}.png".format(channel_index))
     # Make the background consistently white (True).
     data = data == background_colors
-    Image.fromarray(data).save("debug_after_{}.png".format(channel_index))
+    if save_debug_images:
+        Image.fromarray(data).save("debug_after_{}.png".format(channel_index))
     return data
 
 
@@ -154,10 +160,12 @@ def preprocess(image,
                resize_factor,
                convert_grayscale,
                shift_channels,
-               label_components):
+               label_components,
+               save_debug_images):
     new_size = (image.size[0] * resize_factor, image.size[1] * resize_factor)
     image = image.resize(new_size, Image.NEAREST)
-    image.save("debug_resized.png")
+    if save_debug_images:
+        image.save("debug_resized.png")
 
     data = np.array(image)
     if shift_channels:
@@ -172,14 +180,16 @@ def preprocess(image,
                                 None,
                                 threshold_function,
                                 correction_block_size,
-                                label_components)
+                                label_components,
+                                save_debug_images)
         image = Image.fromarray(data)
     else:
         channels = [binarize_channel(data[:, :, i],
                                      i,
                                      threshold_function,
                                      correction_block_size,
-                                     label_components)
+                                     label_components,
+                                     save_debug_images)
                     for i in range(3)]
         data = np.stack(channels, axis=-1)
         data = np.all(data, axis=-1)
@@ -188,6 +198,8 @@ def preprocess(image,
     image = ImageOps.expand(image, margin, "white")
     # Ensure consistent performance measurements.
     image.load()
+    if save_debug_images:
+        image.save("debug_final.png")
     return image
 
 
@@ -234,10 +246,11 @@ class OcrEstimator(BaseEstimator):
                                resize_factor=self.resize_factor,
                                convert_grayscale=self.convert_grayscale,
                                shift_channels=self.shift_channels,
-                               label_components=self.label_components)
+                               label_components=self.label_components,
+                               save_debug_images=False)
             # Assume "api" is set globally. This is easier than making it a
             # param because it does not support deepcopy.
-            result = binary_image_to_string(image, tessdata_dir_config)
+            result = binary_image_to_string(image, tessdata_dir_config, save_debug_images)
             error += cost(result, gt_text)
         return -error
             
@@ -262,8 +275,19 @@ resize_factor = 3
 convert_grayscale = True
 shift_channels = True
 label_components = False
-preprocessing_time = timeit.timeit("global preprocessed_image; preprocessed_image = preprocess(image, threshold_function, correction_block_size, margin, resize_factor, convert_grayscale, shift_channels, label_components)", globals=globals(), number=1)
-preprocessed_image.save("debug.png")
+save_debug_images = True
+preprocessing_command = """
+global preprocessed_image;
+preprocessed_image = preprocess(image,
+                                threshold_function=threshold_function,
+                                correction_block_size=correction_block_size,
+                                margin=margin,
+                                resize_factor=resize_factor,
+                                convert_grayscale=convert_grayscale,
+                                shift_channels=shift_channels,
+                                label_components=label_components,
+                                save_debug_images=save_debug_images)"""
+preprocessing_time = timeit.timeit(preprocessing_command, globals=globals(), number=1)
 
 # Load ground truth.
 gt_path = "train/pillow_docs.txt"
@@ -280,10 +304,10 @@ mode = "debug"
 with PyTessBaseAPI(path=data_path) as api:
     if mode == "debug":
         native_string = None
-        native_time = timeit.timeit("global native_string; native_string = native_image_to_string(preprocessed_image, api)", globals=globals(), number=1)
+        native_time = timeit.timeit("global native_string; native_string = native_image_to_string(preprocessed_image, api, save_debug_images)", globals=globals(), number=1)
         native_cost = cost(native_string, gt_string)
         binary_string = None
-        binary_time = timeit.timeit("global binary_string; binary_string = binary_image_to_string(preprocessed_image, tessdata_dir_config)", globals=globals(), number=1)
+        binary_time = timeit.timeit("global binary_string; binary_string = binary_image_to_string(preprocessed_image, tessdata_dir_config, save_debug_images)", globals=globals(), number=1)
         binary_cost = cost(binary_string, gt_string)
         with open("debug_native.txt", "w") as file:
             file.write(native_string)
