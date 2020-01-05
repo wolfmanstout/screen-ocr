@@ -48,15 +48,19 @@ def binary_image_to_string(image, config):
     boxes = pytesseract.image_to_data(image, config=config, output_type=pytesseract.Output.DATAFRAME)
     lines = []
     words = []
+    confidences = []
     for _, box in boxes.iterrows():
         if box.level == 4:
             if words:
                 line_box.text = " ".join(words)
+                line_box.conf = np.mean(confidences).astype(np.int32)
                 lines.append(line_box)
             words = []
+            confidences = []
             line_box = box
         if box.level == 5:
-            words.append(box.text)
+            words.append(str(box.text))
+            confidences.append(box.conf)
     if words:
         line_box.text = " ".join(words)
         lines.append(line_box)
@@ -192,6 +196,7 @@ class OcrEstimator(BaseEstimator):
     def __init__(self,
                  threshold_type=None,
                  block_size=None,
+                 correction_block_size=None,
                  margin=None,
                  resize_factor=None,
                  convert_grayscale=None,
@@ -199,6 +204,7 @@ class OcrEstimator(BaseEstimator):
                  label_components=None):
         self.threshold_type = threshold_type
         self.block_size = block_size
+        self.correction_block_size = correction_block_size
         self.margin = margin
         self.resize_factor = resize_factor
         self.convert_grayscale = convert_grayscale
@@ -224,7 +230,7 @@ class OcrEstimator(BaseEstimator):
         for image, gt_text in zip(X, y):
             image = preprocess(image,
                                threshold_function=self.threshold_function_,
-                               correction_block_size=self.block_size,
+                               correction_block_size=self.correction_block_size,
                                margin=self.margin,
                                resize_factor=self.resize_factor,
                                convert_grayscale=self.convert_grayscale,
@@ -249,14 +255,15 @@ image = Image.open(image_path).convert("RGB") #.crop(bounding_box)
 
 # Preprocess the image.
 block_size = 61
-# threshold_function = lambda data: filters.threshold_otsu(data)
-threshold_function = lambda data: filters.rank.otsu(data, morphology.square(block_size))
+threshold_function = lambda data: filters.threshold_otsu(data)
+# threshold_function = lambda data: filters.rank.otsu(data, morphology.square(correction_block_size))
+correction_block_size = 61
 margin = 40
 resize_factor = 3
 convert_grayscale = True
 shift_channels = True
 label_components = False
-preprocessing_time = timeit.timeit("global preprocessed_image; preprocessed_image = preprocess(image, threshold_function, block_size, margin, resize_factor, convert_grayscale, shift_channels, label_components)", globals=globals(), number=1)
+preprocessing_time = timeit.timeit("global preprocessed_image; preprocessed_image = preprocess(image, threshold_function, correction_block_size, margin, resize_factor, convert_grayscale, shift_channels, label_components)", globals=globals(), number=1)
 preprocessed_image.save("debug.png")
 
 # Load ground truth.
@@ -269,41 +276,45 @@ data_path = r"C:\Program Files\Tesseract-OCR\tessdata"
 # data_path = r"C:\Users\james\tessdata_fast"
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 tessdata_dir_config = r'--tessdata-dir "{}"'.format(data_path)
+mode = "debug"
+# mode = "grid_search"
 with PyTessBaseAPI(path=data_path) as api:
-    # native_string = None
-    # native_time = timeit.timeit("global native_string; native_string = native_image_to_string(preprocessed_image, api)", globals=globals(), number=1)
-    # native_cost = cost(native_string, gt_string)
-    # binary_string = None
-    # binary_time = timeit.timeit("global binary_string; binary_string = binary_image_to_string(preprocessed_image, tessdata_dir_config)", globals=globals(), number=1)
-    # binary_cost = cost(binary_string, gt_string)
-    # with open("debug_native.txt", "w") as file:
-    #     file.write(native_string)
-    # with open("debug_binary.txt", "w") as file:
-    #     file.write(binary_string)
-    # print(native_string)
-    # print("------------------")
-    # print(binary_string)
-    # print("preprocessing time: {:f}".format(preprocessing_time))
-    # print("native\ttime: {:.2f}\tcost: {:.2f}".format(native_time, native_cost))
-    # print("binary\ttime: {:.2f}\tcost: {:.2f}".format(binary_time, binary_cost))
-
-    X = [image]
-    y = [gt_string]
-    grid_search = model_selection.GridSearchCV(
-        OcrEstimator(),
-        {
-            "threshold_type": ["otsu", "local_otsu", "local"],  # , "niblack", "sauvola"],
-            "block_size": [51, 61, 71],
-            "margin": [40],
-            "resize_factor": [3, 4],
-            "convert_grayscale": [True],
-            "shift_channels": [False, True],
-            "label_components": [False],
-        },
-        cv=model_selection.PredefinedSplit([0] * len(y))
-    )
-    grid_search.fit(X, y)
-    results = pd.DataFrame(grid_search.cv_results_)
-    results.set_index("params", inplace=True)
-    print(results["mean_test_score"].sort_values(ascending=False))
-    print(grid_search.best_params_)
+    if mode == "debug":
+        native_string = None
+        native_time = timeit.timeit("global native_string; native_string = native_image_to_string(preprocessed_image, api)", globals=globals(), number=1)
+        native_cost = cost(native_string, gt_string)
+        binary_string = None
+        binary_time = timeit.timeit("global binary_string; binary_string = binary_image_to_string(preprocessed_image, tessdata_dir_config)", globals=globals(), number=1)
+        binary_cost = cost(binary_string, gt_string)
+        with open("debug_native.txt", "w") as file:
+            file.write(native_string)
+        with open("debug_binary.txt", "w") as file:
+            file.write(binary_string)
+        print(native_string)
+        print("------------------")
+        print(binary_string)
+        print("preprocessing time: {:f}".format(preprocessing_time))
+        print("native\ttime: {:.2f}\tcost: {:.2f}".format(native_time, native_cost))
+        print("binary\ttime: {:.2f}\tcost: {:.2f}".format(binary_time, binary_cost))
+    elif mode == "grid_search":
+        X = [image]
+        y = [gt_string]
+        grid_search = model_selection.GridSearchCV(
+            OcrEstimator(),
+            {
+                "threshold_type": ["otsu", "local_otsu", "local"],  # , "niblack", "sauvola"],
+                "block_size": [51, 61, 71],
+                "correction_block_size": [51, 61, 71],
+                "margin": [40],
+                "resize_factor": [3, 4],
+                "convert_grayscale": [True],
+                "shift_channels": [False, True],
+                "label_components": [False],
+            },
+            cv=model_selection.PredefinedSplit([0] * len(y))
+        )
+        grid_search.fit(X, y)
+        results = pd.DataFrame(grid_search.cv_results_)
+        results.set_index("params", inplace=True)
+        print(results["mean_test_score"].sort_values(ascending=False))
+        print(grid_search.best_params_)
