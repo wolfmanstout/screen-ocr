@@ -8,7 +8,6 @@ from weighted_levenshtein import lev
 import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw, ImageGrab, ImageOps
-import skimage
 from skimage import filters, measure, morphology, transform
 from sklearn.base import BaseEstimator
 from sklearn import model_selection
