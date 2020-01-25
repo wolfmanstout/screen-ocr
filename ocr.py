@@ -65,7 +65,8 @@ def binary_image_to_string(image, config, save_debug_images):
         line_box.text = " ".join(words)
         lines.append(line_box)
     line_boxes = pd.DataFrame(lines)
-    line_boxes.sort_values(by=["top", "left"])
+    if not line_boxes.empty:
+        line_boxes = line_boxes.sort_values(by=["top", "left"])
     text_lines = []
     for box in line_boxes.itertuples():
         draw.line([box.left, box.top,
@@ -82,8 +83,10 @@ def binary_image_to_string(image, config, save_debug_images):
     return "\n".join(text_lines)
 
 
-delete_costs = np.ones(128, dtype=np.float64) * 0.1
-def cost(result, gt):
+low_costs = np.ones(128, dtype=np.float64) * 0.1
+zero_costs = np.zeros(128, dtype=np.float64)
+def cost(result, gt, zero_delete_costs=False):
+    delete_costs = zero_costs if zero_delete_costs else low_costs
     # lev() appears to require ASCII encoding.
     return lev(result.encode("ascii", errors="ignore"), gt, delete_costs=delete_costs)
 
@@ -124,7 +127,11 @@ def shift_channel(data, channel_index):
 def binarize_channel(data, channel_index, threshold_function, correction_block_size, label_components, save_debug_images):
     if save_debug_images:
         Image.fromarray(data).save("debug_before_{}.png".format(channel_index))
-    threshold = threshold_function(data)
+    # Necessary to avoid ValueError from Otsu threshold.
+    if data.min() == data.max():
+        threshold = np.uint8(0)
+    else:
+        threshold = threshold_function(data)
     if save_debug_images:
         if threshold.ndim == 2:
             Image.fromarray(threshold.astype(np.uint8)).save("debug_threshold_{}.png".format(channel_index))
@@ -251,7 +258,7 @@ class OcrEstimator(BaseEstimator):
             # Assume "api" is set globally. This is easier than making it a
             # param because it does not support deepcopy.
             result = binary_image_to_string(image, tessdata_dir_config, save_debug_images)
-            error += cost(result, gt_text)
+            error += cost(result, gt_text, zero_delete_costs)
         return -error
             
 
@@ -260,18 +267,42 @@ for debug_output in glob.glob("debug*"):
   os.remove(debug_output)
 
 # Load image and crop.
-bounding_box = (0, 0, 200, 200)
-image_path = "train/pillow_docs.png"
-image = Image.open(image_path).convert("RGB") #.crop(bounding_box)
+# logs_example = "failure_1578861893.90"
+# image_path = "train/pillow_docs.png"
+# image_path = "logs/{}.png".format(logs_example)
+# image = Image.open(image_path).convert("RGB") #.crop(bounding_box)
 # image = ImageGrab.grab(bounding_box)
 
+# Load ground truth.
+# gt_path = "train/pillow_docs.txt"
+# gt_path = "logs/{}.txt".format(logs_example)
+# with open(gt_path, "r") as gt_file:
+#     gt_string = gt_file.read()
+
+X = []
+y = []
+text_files = set(glob.glob("logs/*.txt"))
+for image_file in glob.glob("logs/*.png"):
+    text_file = image_file[:-3] + "txt"
+    if not text_file in text_files:
+        continue
+    X.append(Image.open(image_file).convert("RGB"))
+    with open(text_file, "r") as f:
+        y.append(f.read())
+
+
+index = 0
+image = X[index]
+gt_string = y[index]
+
+
 # Preprocess the image.
-block_size = 61
+block_size = None
 threshold_function = lambda data: filters.threshold_otsu(data)
 # threshold_function = lambda data: filters.rank.otsu(data, morphology.square(correction_block_size))
-correction_block_size = 61
-margin = 40
-resize_factor = 3
+correction_block_size = 41
+margin = 50
+resize_factor = 2
 convert_grayscale = True
 shift_channels = True
 label_components = False
@@ -289,11 +320,6 @@ preprocessed_image = preprocess(image,
                                 save_debug_images=save_debug_images)"""
 preprocessing_time = timeit.timeit(preprocessing_command, globals=globals(), number=1)
 
-# Load ground truth.
-gt_path = "train/pillow_docs.txt"
-with open(gt_path, "r") as gt_file:
-    gt_string = gt_file.read()
-
 # Run OCR.
 data_path = r"C:\Program Files\Tesseract-OCR\tessdata"
 # data_path = r"C:\Users\james\tessdata_fast"
@@ -301,18 +327,20 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 tessdata_dir_config = r'--tessdata-dir "{}"'.format(data_path)
 mode = "debug"
 # mode = "grid_search"
+zero_delete_costs = True
 with PyTessBaseAPI(path=data_path) as api:
     if mode == "debug":
         native_string = None
         native_time = timeit.timeit("global native_string; native_string = native_image_to_string(preprocessed_image, api, save_debug_images)", globals=globals(), number=1)
-        native_cost = cost(native_string, gt_string)
+        native_cost = cost(native_string, gt_string, zero_delete_costs)
         binary_string = None
         binary_time = timeit.timeit("global binary_string; binary_string = binary_image_to_string(preprocessed_image, tessdata_dir_config, save_debug_images)", globals=globals(), number=1)
-        binary_cost = cost(binary_string, gt_string)
+        binary_cost = cost(binary_string, gt_string, zero_delete_costs)
         with open("debug_native.txt", "w") as file:
             file.write(native_string)
         with open("debug_binary.txt", "w") as file:
             file.write(binary_string)
+        print("Ground truth: {}".format(gt_string))
         print(native_string)
         print("------------------")
         print(binary_string)
@@ -320,16 +348,14 @@ with PyTessBaseAPI(path=data_path) as api:
         print("native\ttime: {:.2f}\tcost: {:.2f}".format(native_time, native_cost))
         print("binary\ttime: {:.2f}\tcost: {:.2f}".format(binary_time, binary_cost))
     elif mode == "grid_search":
-        X = [image]
-        y = [gt_string]
         grid_search = model_selection.GridSearchCV(
             OcrEstimator(),
             {
-                "threshold_type": ["otsu", "local_otsu", "local"],  # , "niblack", "sauvola"],
-                "block_size": [51, 61, 71],
-                "correction_block_size": [51, 61, 71],
-                "margin": [40],
-                "resize_factor": [3, 4],
+                "threshold_type": ["otsu"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
+                "block_size": [None], # [51, 61, 71],
+                "correction_block_size": [41, 51, 61, 71],
+                "margin": [30, 40, 50],
+                "resize_factor": [2, 3, 4],
                 "convert_grayscale": [True],
                 "shift_channels": [False, True],
                 "label_components": [False],
