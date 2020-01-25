@@ -1,5 +1,6 @@
 import os
 import glob
+import random
 import timeit
 
 from tesserocr import PyTessBaseAPI, RIL
@@ -12,6 +13,7 @@ from skimage import filters, measure, morphology, transform
 from sklearn.base import BaseEstimator
 from sklearn import model_selection
 
+random.seed(517548236)
 
 def native_image_to_string(image, api, save_debug_images):
     api.SetImage(image)
@@ -279,17 +281,33 @@ for debug_output in glob.glob("debug*"):
 # with open(gt_path, "r") as gt_file:
 #     gt_string = gt_file.read()
 
-X = []
-y = []
 text_files = set(glob.glob("logs/*.txt"))
+success_data = []
+failure_data = []
 for image_file in glob.glob("logs/*.png"):
     text_file = image_file[:-3] + "txt"
     if not text_file in text_files:
         continue
+    base_name = os.path.basename(text_file)
+    if base_name.startswith("success"):
+        success_data.append((image_file, text_file))
+    elif base_name.startswith("failure"):
+        failure_data.append((image_file, text_file))
+    else:
+        raise AssertionError("Unexpected file name: {}".format(base_name))
+
+random.shuffle(success_data)
+random.shuffle(failure_data)
+# Downsample the success data so that it's proportional to the failure data.
+# Only reason to do this is to save on compute resources.
+labeled_data = failure_data + success_data[:len(failure_data)]
+
+X = []
+y = []
+for image_file, text_file in labeled_data:
     X.append(Image.open(image_file).convert("RGB"))
     with open(text_file, "r") as f:
         y.append(f.read())
-
 
 index = 0
 image = X[index]
@@ -353,9 +371,9 @@ with PyTessBaseAPI(path=data_path) as api:
             {
                 "threshold_type": ["otsu"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
                 "block_size": [None], # [51, 61, 71],
-                "correction_block_size": [41, 51, 61, 71],
+                "correction_block_size": [31, 41, 51, 61],
                 "margin": [30, 40, 50],
-                "resize_factor": [2, 3, 4],
+                "resize_factor": [2], # , 3, 4],
                 "convert_grayscale": [True],
                 "shift_channels": [False, True],
                 "label_components": [False],
