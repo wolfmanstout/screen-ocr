@@ -318,7 +318,7 @@ gt_string = y[index]
 block_size = None
 threshold_function = lambda data: filters.threshold_otsu(data)
 # threshold_function = lambda data: filters.rank.otsu(data, morphology.square(correction_block_size))
-correction_block_size = 41
+correction_block_size = 31
 margin = 50
 resize_factor = 2
 convert_grayscale = True
@@ -371,8 +371,8 @@ with PyTessBaseAPI(path=data_path) as api:
             {
                 "threshold_type": ["otsu"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
                 "block_size": [None], # [51, 61, 71],
-                "correction_block_size": [31, 41, 51, 61],
-                "margin": [30, 40, 50],
+                "correction_block_size": [11, 21, 31, 41, 51, 61],
+                "margin": [30, 40, 50, 60, 70],
                 "resize_factor": [2], # , 3, 4],
                 "convert_grayscale": [True],
                 "shift_channels": [False, True],
