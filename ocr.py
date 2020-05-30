@@ -4,6 +4,7 @@ import random
 import timeit
 
 from tesserocr import PyTessBaseAPI, RIL
+import imagehash
 import pytesseract
 from weighted_levenshtein import lev
 import numpy as np
@@ -282,9 +283,23 @@ for debug_output in glob.glob("debug*"):
 #     gt_string = gt_file.read()
 
 text_files = set(glob.glob("logs/*.txt"))
+average_hashes = set()
+color_hashes = set()
 success_data = []
 failure_data = []
 for image_file in glob.glob("logs/*.png"):
+    # Skip near-duplicate images. Hash functions and parameters determined
+    # experimentally.
+    image = Image.open(image_file)
+    average_hash = imagehash.average_hash(image, 10)
+    if average_hash in average_hashes:
+        continue
+    average_hashes.add(average_hash)
+    color_hash = imagehash.colorhash(image, 5)
+    if color_hash in color_hashes:
+        continue
+    color_hashes.add(color_hash)
+
     text_file = image_file[:-3] + "txt"
     if not text_file in text_files:
         continue
@@ -371,8 +386,8 @@ with PyTessBaseAPI(path=data_path) as api:
             {
                 "threshold_type": ["otsu"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
                 "block_size": [None], # [51, 61, 71],
-                "correction_block_size": [11, 21, 31, 41, 51, 61],
-                "margin": [30, 40, 50, 60, 70],
+                "correction_block_size": [21, 26, 31, 36, 41],
+                "margin": [40, 45, 50, 55, 60],
                 "resize_factor": [2], # , 3, 4],
                 "convert_grayscale": [True],
                 "shift_channels": [False, True],

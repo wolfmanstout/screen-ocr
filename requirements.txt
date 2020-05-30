@@ -1,8 +1,9 @@
+imagehash
+numpy
+pandas
 pillow
 pytesseract
-tesserocr
-weighted-levenshtein
-numpy
 scikit-image
 scikit-learn
-pandas
+tesserocr
+weighted-levenshtein
