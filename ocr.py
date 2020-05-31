@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw, ImageGrab, ImageOps
 from skimage import filters, measure, morphology, transform
 from sklearn.base import BaseEstimator
 from sklearn import model_selection
+from IPython.display import display
 
 random.seed(517548236)
 
@@ -20,7 +21,8 @@ def native_image_to_string(image, api, save_debug_images):
     api.SetImage(image)
     # return api.GetUTF8Text()
     debug_image = image.convert("RGB")
-    draw = ImageDraw.Draw(debug_image)
+    if save_debug_images:
+        draw = ImageDraw.Draw(debug_image)
     result = ""
     boxes = api.GetComponentImages(RIL.TEXTLINE, True)
     boxes = sorted(boxes, key=lambda box: (box[1]["y"], box[1]["x"]))
@@ -29,16 +31,17 @@ def native_image_to_string(image, api, save_debug_images):
         api.SetRectangle(box["x"], box["y"], box["w"], box["h"])
         # if api.MeanTextConf() < 50:
         #     continue
-        draw.line([box["x"], box["y"],
-                   box["x"] + box["w"], box["y"],
-                   box["x"] + box["w"], box["y"] + box["h"],
-                   box["x"], box["y"] + box["h"],
-                   box["x"], box["y"]],
-                  fill=(255 - (api.MeanTextConf() * 255 // 100), api.MeanTextConf() * 255 // 100, 0),
-                  width=4)
+        if save_debug_images:
+            draw.line([box["x"], box["y"],
+                       box["x"] + box["w"], box["y"],
+                       box["x"] + box["w"], box["y"] + box["h"],
+                       box["x"], box["y"] + box["h"],
+                       box["x"], box["y"]],
+                      fill=(255 - (api.MeanTextConf() * 255 // 100), api.MeanTextConf() * 255 // 100, 0),
+                      width=4)
         text_lines.append(api.GetUTF8Text())
-    del draw
     if save_debug_images:
+        del draw
         debug_image.save("debug_boxes_native.png")
     return "".join(text_lines)
 
@@ -46,7 +49,8 @@ def native_image_to_string(image, api, save_debug_images):
 def binary_image_to_string(image, config, save_debug_images):
     # return pytesseract.image_to_string(image, config=config)
     debug_image = image.convert("RGB")
-    draw = ImageDraw.Draw(debug_image)
+    if save_debug_images:
+        draw = ImageDraw.Draw(debug_image)
     result = ""
     boxes = pytesseract.image_to_data(image, config=config, output_type=pytesseract.Output.DATAFRAME)
     lines = []
@@ -72,16 +76,19 @@ def binary_image_to_string(image, config, save_debug_images):
         line_boxes = line_boxes.sort_values(by=["top", "left"])
     text_lines = []
     for box in line_boxes.itertuples():
-        draw.line([box.left, box.top,
-                   box.left + box.width, box.top,
-                   box.left + box.width, box.top + box.height,
-                   box.left, box.top + box.height,
-                   box.left, box.top],
-                  fill=(255 - (box.conf * 255 // 100), box.conf * 255 // 100, 0),
-                  width=4)
-        text_lines.append(box.text)
-    del draw
+        # if not isinstance(box.conf, int) or box.conf < 0 or box.conf > 100:
+        #     continue
+        if save_debug_images:
+            draw.line([box.left, box.top,
+                       box.left + box.width, box.top,
+                       box.left + box.width, box.top + box.height,
+                       box.left, box.top + box.height,
+                       box.left, box.top],
+                      fill=(255 - (box.conf * 255 // 100), box.conf * 255 // 100, 0),
+                      width=4)
+        text_lines.append(str(box.text))
     if save_debug_images:
+        del draw
         debug_image.save("debug_boxes_binary.png")
     return "\n".join(text_lines)
 
@@ -260,7 +267,7 @@ class OcrEstimator(BaseEstimator):
                                save_debug_images=False)
             # Assume "api" is set globally. This is easier than making it a
             # param because it does not support deepcopy.
-            result = binary_image_to_string(image, tessdata_dir_config, save_debug_images)
+            result = binary_image_to_string(image, tessdata_dir_config, save_debug_images=False)
             error += cost(result, gt_text, zero_delete_costs)
         return -error
             
@@ -333,8 +340,8 @@ gt_string = y[index]
 block_size = None
 threshold_function = lambda data: filters.threshold_otsu(data)
 # threshold_function = lambda data: filters.rank.otsu(data, morphology.square(correction_block_size))
-correction_block_size = 31
-margin = 50
+correction_block_size = 41
+margin = 60
 resize_factor = 2
 convert_grayscale = True
 shift_channels = True
@@ -363,6 +370,8 @@ mode = "debug"
 zero_delete_costs = True
 with PyTessBaseAPI(path=data_path) as api:
     if mode == "debug":
+        display(image)
+        display(preprocessed_image)
         native_string = None
         native_time = timeit.timeit("global native_string; native_string = native_image_to_string(preprocessed_image, api, save_debug_images)", globals=globals(), number=1)
         native_cost = cost(native_string, gt_string, zero_delete_costs)
@@ -386,8 +395,8 @@ with PyTessBaseAPI(path=data_path) as api:
             {
                 "threshold_type": ["otsu"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
                 "block_size": [None], # [51, 61, 71],
-                "correction_block_size": [21, 26, 31, 36, 41],
-                "margin": [40, 45, 50, 55, 60],
+                "correction_block_size": [36, 41, 46],
+                "margin": [50, 60, 70],
                 "resize_factor": [2], # , 3, 4],
                 "convert_grayscale": [True],
                 "shift_channels": [False, True],
