@@ -1,3 +1,4 @@
+import argparse
 import os
 import glob
 import random
@@ -16,6 +17,11 @@ from sklearn.base import BaseEstimator
 from sklearn import model_selection
 from IPython.display import display
 
+parser = argparse.ArgumentParser()
+parser.add_argument("mode", choices=["debug", "grid_search"])
+args = parser.parse_args()
+
+# Set seed manually for reproducibility.
 random.seed(517548236)
 
 def native_image_to_string(image, api, save_debug_images):
@@ -248,11 +254,9 @@ data_path = r"C:\Program Files\Tesseract-OCR\tessdata"
 # data_path = r"C:\Users\james\tessdata_fast"
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 tessdata_dir_config = r'--tessdata-dir "{}"'.format(data_path)
-mode = "debug"
-# mode = "grid_search"
 zero_delete_costs = True
 with PyTessBaseAPI(path=data_path) as api:
-    if mode == "debug":
+    if args.mode == "debug":
         display(image)
         display(preprocessed_image)
         native_string = None
@@ -272,7 +276,7 @@ with PyTessBaseAPI(path=data_path) as api:
         print("preprocessing time: {:f}".format(preprocessing_time))
         print("native\ttime: {:.2f}\tcost: {:.2f}".format(native_time, native_cost))
         print("binary\ttime: {:.2f}\tcost: {:.2f}".format(binary_time, binary_cost))
-    elif mode == "grid_search":
+    elif args.mode == "grid_search":
         grid_search = model_selection.GridSearchCV(
             OcrEstimator(),
             {
@@ -285,7 +289,8 @@ with PyTessBaseAPI(path=data_path) as api:
                 "shift_channels": [False, True],
                 "label_components": [False],
             },
-            cv=model_selection.PredefinedSplit([0] * len(y))
+            # Evaluate each example separately so that standard deviation is automatically computed.
+            cv=model_selection.LeaveOneOut()  # model_selection.PredefinedSplit([0] * len(y))
         )
         grid_search.fit(X, y)
         results = pd.DataFrame(grid_search.cv_results_)
