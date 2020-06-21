@@ -129,31 +129,31 @@ class OcrEstimator(BaseEstimator):
 
     def fit(self, X=None, y=None):
         if self.threshold_type == "otsu":
-            self.threshold_function_ = lambda data: filters.threshold_otsu(data)
+            threshold_function = lambda data: filters.threshold_otsu(data)
         elif self.threshold_type == "local_otsu":
-            self.threshold_function_ = lambda data: filters.rank.otsu(data, morphology.square(self.block_size))
+            threshold_function = lambda data: filters.rank.otsu(data, morphology.square(self.block_size))
         elif self.threshold_type == "local":
-            self.threshold_function_ = lambda data: filters.threshold_local(data, self.block_size)
+            threshold_function = lambda data: filters.threshold_local(data, self.block_size)
         elif self.threshold_type == "niblack":
-            self.threshold_function_ = lambda data: filters.threshold_niblack(data, self.block_size)
+            threshold_function = lambda data: filters.threshold_niblack(data, self.block_size)
         elif self.threshold_type == "sauvola":
-            self.threshold_function_ = lambda data: filters.threshold_sauvola(data, self.block_size)
+            threshold_function = lambda data: filters.threshold_sauvola(data, self.block_size)
         else:
             raise ValueError("Unknown threshold type: {}".format(self.threshold_type))
+        self.ocr_reader_ = screen_ocr.Reader(
+            threshold_function=threshold_function,
+            correction_block_size=self.correction_block_size,
+            margin=self.margin,
+            resize_factor=self.resize_factor,
+            convert_grayscale=self.convert_grayscale,
+            shift_channels=self.shift_channels,
+            label_components=self.label_components,
+            debug_image_callback=None)
 
     def score(self, X, y):
         error = 0
         for image, gt_text in zip(X, y):
-            image = screen_ocr.preprocess(
-                image,
-                threshold_function=self.threshold_function_,
-                correction_block_size=self.correction_block_size,
-                margin=self.margin,
-                resize_factor=self.resize_factor,
-                convert_grayscale=self.convert_grayscale,
-                shift_channels=self.shift_channels,
-                label_components=self.label_components,
-                save_debug_images=False)
+            image = self.ocr_reader_.preprocess(image)
             # Assume "api" is set globally. This is easier than making it a
             # param because it does not support deepcopy.
             result = binary_image_to_string(image, tessdata_dir_config, save_debug_images=False)
@@ -235,18 +235,21 @@ resize_factor = 2
 convert_grayscale = True
 shift_channels = True
 label_components = False
+debug_image_callback = lambda name, image: image.save(name)
+# TODO remove
 save_debug_images = True
+ocr_reader = screen_ocr.Reader(
+    threshold_function=threshold_function,
+    correction_block_size=correction_block_size,
+    margin=margin,
+    resize_factor=resize_factor,
+    convert_grayscale=convert_grayscale,
+    shift_channels=shift_channels,
+    label_components=label_components,
+    debug_image_callback=debug_image_callback)
 preprocessing_command = """
 global preprocessed_image;
-preprocessed_image = screen_ocr.preprocess(image,
-                                threshold_function=threshold_function,
-                                correction_block_size=correction_block_size,
-                                margin=margin,
-                                resize_factor=resize_factor,
-                                convert_grayscale=convert_grayscale,
-                                shift_channels=shift_channels,
-                                label_components=label_components,
-                                save_debug_images=save_debug_images)"""
+preprocessed_image = ocr_reader.preprocess(image)"""
 preprocessing_time = timeit.timeit(preprocessing_command, globals=globals(), number=1)
 
 # Run OCR.
