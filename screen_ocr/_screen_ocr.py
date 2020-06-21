@@ -61,7 +61,7 @@ class Reader(object):
         new_size = (image.size[0] * self.resize_factor, image.size[1] * self.resize_factor)
         image = image.resize(new_size, Image.NEAREST)
         if self.debug_image_callback:
-            self.debug_image_callback("debug_resized.png", image)
+            self.debug_image_callback("debug_resized", image)
 
         data = np.array(image)
         if self.shift_channels:
@@ -85,12 +85,12 @@ class Reader(object):
         # Ensure consistent performance measurements.
         image.load()
         if self.debug_image_callback:
-            self.debug_image_callback("debug_final.png", image)
+            self.debug_image_callback("debug_final", image)
         return image
 
     def _binarize_channel(self, data, channel_index):
         if self.debug_image_callback:
-            self.debug_image_callback("debug_before_{}.png".format(channel_index), Image.fromarray(data))
+            self.debug_image_callback("debug_before_{}".format(channel_index), Image.fromarray(data))
         # Necessary to avoid ValueError from Otsu threshold.
         if data.min() == data.max():
             threshold = np.uint8(0)
@@ -98,9 +98,9 @@ class Reader(object):
             threshold = self.threshold_function(data)
         if self.debug_image_callback:
             if threshold.ndim == 2:
-                self.debug_image_callback("debug_threshold_{}.png".format(channel_index), Image.fromarray(threshold.astype(np.uint8)))
+                self.debug_image_callback("debug_threshold_{}".format(channel_index), Image.fromarray(threshold.astype(np.uint8)))
             else:
-                self.debug_image_callback("debug_threshold_{}.png".format(channel_index), Image.fromarray(np.ones_like(data) * threshold))
+                self.debug_image_callback("debug_threshold_{}".format(channel_index), Image.fromarray(np.ones_like(data) * threshold))
         data = data > threshold
         if self.label_components:
             labels, num_labels = measure.label(data, background=-1, return_num=True)
@@ -116,11 +116,11 @@ class Reader(object):
             # background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
             #                                        morphology.square(self.correction_block_size))
         if self.debug_image_callback:
-            self.debug_image_callback("debug_background_{}.png".format(channel_index), Image.fromarray(background_colors == True))
+            self.debug_image_callback("debug_background_{}".format(channel_index), Image.fromarray(background_colors == True))
         # Make the background consistently white (True).
         data = data == background_colors
         if self.debug_image_callback:
-            self.debug_image_callback("debug_after_{}.png".format(channel_index), Image.fromarray(data))
+            self.debug_image_callback("debug_after_{}".format(channel_index), Image.fromarray(data))
         return data
 
 

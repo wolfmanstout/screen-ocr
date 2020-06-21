@@ -19,16 +19,18 @@ from IPython.display import display
 
 parser = argparse.ArgumentParser()
 parser.add_argument("mode", choices=["debug", "grid_search"])
+parser.add_argument("--verbose", action="store_true")
+parser.add_argument("--all", action="store_true")
 args = parser.parse_args()
 
 # Set seed manually for reproducibility.
 random.seed(517548236)
 
-def native_image_to_string(image, api, save_debug_images):
+def native_image_to_string(image, api, debug_image_callback):
     api.SetImage(image)
     # return api.GetUTF8Text()
     debug_image = image.convert("RGB")
-    if save_debug_images:
+    if debug_image_callback:
         draw = ImageDraw.Draw(debug_image)
     result = ""
     boxes = api.GetComponentImages(RIL.TEXTLINE, True)
@@ -38,7 +40,7 @@ def native_image_to_string(image, api, save_debug_images):
         api.SetRectangle(box["x"], box["y"], box["w"], box["h"])
         # if api.MeanTextConf() < 50:
         #     continue
-        if save_debug_images:
+        if debug_image_callback:
             draw.line([box["x"], box["y"],
                        box["x"] + box["w"], box["y"],
                        box["x"] + box["w"], box["y"] + box["h"],
@@ -47,16 +49,16 @@ def native_image_to_string(image, api, save_debug_images):
                       fill=(255 - (api.MeanTextConf() * 255 // 100), api.MeanTextConf() * 255 // 100, 0),
                       width=4)
         text_lines.append(api.GetUTF8Text())
-    if save_debug_images:
+    if debug_image_callback:
         del draw
-        debug_image.save("debug_boxes_native.png")
+        debug_image_callback("debug_boxes_native", debug_image)
     return "".join(text_lines)
 
 
-def binary_image_to_string(image, config, save_debug_images):
+def binary_image_to_string(image, config, debug_image_callback):
     # return pytesseract.image_to_string(image, config=config)
     debug_image = image.convert("RGB")
-    if save_debug_images:
+    if debug_image_callback:
         draw = ImageDraw.Draw(debug_image)
     result = ""
     boxes = pytesseract.image_to_data(image, config=config, output_type=pytesseract.Output.DATAFRAME)
@@ -85,7 +87,7 @@ def binary_image_to_string(image, config, save_debug_images):
     for box in line_boxes.itertuples():
         # if not isinstance(box.conf, int) or box.conf < 0 or box.conf > 100:
         #     continue
-        if save_debug_images:
+        if debug_image_callback:
             draw.line([box.left, box.top,
                        box.left + box.width, box.top,
                        box.left + box.width, box.top + box.height,
@@ -94,9 +96,9 @@ def binary_image_to_string(image, config, save_debug_images):
                       fill=(255 - (box.conf * 255 // 100), box.conf * 255 // 100, 0),
                       width=4)
         text_lines.append(str(box.text))
-    if save_debug_images:
+    if debug_image_callback:
         del draw
-        debug_image.save("debug_boxes_binary.png")
+        debug_image_callback("debug_boxes_binary", debug_image)
     return "\n".join(text_lines)
 
 
@@ -156,7 +158,7 @@ class OcrEstimator(BaseEstimator):
             image = self.ocr_reader_.preprocess(image)
             # Assume "api" is set globally. This is easier than making it a
             # param because it does not support deepcopy.
-            result = binary_image_to_string(image, tessdata_dir_config, save_debug_images=False)
+            result = binary_image_to_string(image, tessdata_dir_config, debug_image_callback=None)
             error += cost(result, gt_text, zero_delete_costs)
         return -error
             
@@ -220,65 +222,70 @@ for image_file, text_file in labeled_data:
     with open(text_file, "r") as f:
         y.append(f.read())
 
-index = 0
-image = X[index]
-gt_string = y[index]
-
-
-# Preprocess the image.
-block_size = None
-threshold_function = lambda data: filters.threshold_otsu(data)
-# threshold_function = lambda data: filters.rank.otsu(data, morphology.square(correction_block_size))
-correction_block_size = 41
-margin = 60
-resize_factor = 2
-convert_grayscale = True
-shift_channels = True
-label_components = False
-debug_image_callback = lambda name, image: image.save(name)
-# TODO remove
-save_debug_images = True
-ocr_reader = screen_ocr.Reader(
-    threshold_function=threshold_function,
-    correction_block_size=correction_block_size,
-    margin=margin,
-    resize_factor=resize_factor,
-    convert_grayscale=convert_grayscale,
-    shift_channels=shift_channels,
-    label_components=label_components,
-    debug_image_callback=debug_image_callback)
-preprocessing_command = """
-global preprocessed_image;
-preprocessed_image = ocr_reader.preprocess(image)"""
-preprocessing_time = timeit.timeit(preprocessing_command, globals=globals(), number=1)
 
 # Run OCR.
 data_path = r"C:\Program Files\Tesseract-OCR\tessdata"
 # data_path = r"C:\Users\james\tessdata_fast"
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 tessdata_dir_config = r'--tessdata-dir "{}"'.format(data_path)
+# TODO devise a better solution that doesn't allow a bunch of noise to result in zero costs
 zero_delete_costs = True
 with PyTessBaseAPI(path=data_path) as api:
     if args.mode == "debug":
-        display(image)
-        display(preprocessed_image)
-        native_string = None
-        native_time = timeit.timeit("global native_string; native_string = native_image_to_string(preprocessed_image, api, save_debug_images)", globals=globals(), number=1)
-        native_cost = cost(native_string, gt_string, zero_delete_costs)
-        binary_string = None
-        binary_time = timeit.timeit("global binary_string; binary_string = binary_image_to_string(preprocessed_image, tessdata_dir_config, save_debug_images)", globals=globals(), number=1)
-        binary_cost = cost(binary_string, gt_string, zero_delete_costs)
-        with open("debug_native.txt", "w") as file:
-            file.write(native_string)
-        with open("debug_binary.txt", "w") as file:
-            file.write(binary_string)
-        print("Ground truth: {}".format(gt_string))
-        print(native_string)
-        print("------------------")
-        print(binary_string)
-        print("preprocessing time: {:f}".format(preprocessing_time))
-        print("native\ttime: {:.2f}\tcost: {:.2f}".format(native_time, native_cost))
-        print("binary\ttime: {:.2f}\tcost: {:.2f}".format(binary_time, binary_cost))
+        indices = range(len(X)) if args.all else [0]
+        for index in indices:
+            print("Processing: {}".format(labeled_data[index][0]))
+            image = X[index]
+            gt_string = y[index]
+            print("Unprocessed:")
+            display(image)
+
+            # Preprocess the image.
+            block_size = None
+            threshold_function = lambda data: filters.threshold_otsu(data)
+            # threshold_function = lambda data: filters.rank.otsu(data, morphology.square(correction_block_size))
+            correction_block_size = 41
+            margin = 60
+            resize_factor = 2
+            convert_grayscale = True
+            shift_channels = True
+            label_components = False
+            if args.verbose:
+                def debug_image_callback(name, image):
+                    print("{}:".format(name))
+                    display(image)
+            else:
+                debug_image_callback = None
+            ocr_reader = screen_ocr.Reader(
+                threshold_function=threshold_function,
+                correction_block_size=correction_block_size,
+                margin=margin,
+                resize_factor=resize_factor,
+                convert_grayscale=convert_grayscale,
+                shift_channels=shift_channels,
+                label_components=label_components,
+                debug_image_callback=debug_image_callback)
+            preprocessing_command = "global preprocessed_image; preprocessed_image = ocr_reader.preprocess(image)"
+            preprocessing_time = timeit.timeit(preprocessing_command, globals=globals(), number=1)
+            print("preprocessing time: {:f}".format(preprocessing_time))
+            print("Preprocessed:")
+            display(preprocessed_image)
+
+            # Run OCR.
+            print("Ground truth: {}".format(gt_string))
+            print("------------------")
+            native_string = None
+            native_time = timeit.timeit("global native_string; native_string = native_image_to_string(preprocessed_image, api, debug_image_callback)", globals=globals(), number=1)
+            native_cost = cost(native_string, gt_string, zero_delete_costs)
+            print("native\ttime: {:.2f}\tcost: {:.2f}".format(native_time, native_cost))
+            print("Native OCR: {}".format(native_string))
+            print("------------------")
+            binary_string = None
+            binary_time = timeit.timeit("global binary_string; binary_string = binary_image_to_string(preprocessed_image, tessdata_dir_config, debug_image_callback)", globals=globals(), number=1)
+            binary_cost = cost(binary_string, gt_string, zero_delete_costs)
+            print("binary\ttime: {:.2f}\tcost: {:.2f}".format(binary_time, binary_cost))
+            print("Binary OCR: {}".format(binary_string))
+            print("------------------")
     elif args.mode == "grid_search":
         grid_search = model_selection.GridSearchCV(
             OcrEstimator(),
