@@ -107,7 +107,7 @@ zero_costs = np.zeros(128, dtype=np.float64)
 def cost(result, gt, zero_delete_costs=False):
     delete_costs = zero_costs if zero_delete_costs else low_costs
     # lev() appears to require ASCII encoding.
-    return lev(result.encode("ascii", errors="ignore"), gt, delete_costs=delete_costs)
+    return lev(result.encode("ascii", errors="ignore").lower(), gt.lower(), delete_costs=delete_costs)
 
 
 class OcrEstimator(BaseEstimator):
