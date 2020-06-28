@@ -7,22 +7,50 @@
 import enum
 import pytesseract
 import numpy as np
+import six
 from PIL import Image, ImageGrab, ImageOps
-from skimage import filters, transform
+from skimage import filters, morphology, transform
 
 
 class Reader(object):
+    @classmethod
+    def create_quality_reader(cls, **kwargs):
+        """Create reader optimized for quality. See constructor for full argument list."""
+        return cls(
+            threshold_function=lambda data: filters.rank.otsu(data, morphology.square(41)),
+            correction_block_size=31,
+            margin=50,
+            resize_factor=2,
+            convert_grayscale=True,
+            shift_channels=True,
+            label_components=False,
+            **kwargs)
+
+    @classmethod
+    def create_fast_reader(cls, **kwargs):
+        """Create reader optimized for speed. See constructor for full argument list."""
+        return cls(
+            threshold_function=lambda data: filters.threshold_otsu(data),
+            correction_block_size=41,
+            margin=60,
+            resize_factor=2,
+            convert_grayscale=True,
+            shift_channels=True,
+            label_components=False,
+            **kwargs)
+
+
     def __init__(self,
+                 threshold_function,
+                 correction_block_size,
+                 margin,
+                 resize_factor,
+                 convert_grayscale,
+                 shift_channels,
+                 label_components,
+                 debug_image_callback=None,
                  tesseract_data_path=r"C:\Program Files\Tesseract-OCR\tessdata",
-                 tesseract_command=r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-                 threshold_function=lambda data: filters.threshold_otsu(data),
-                 correction_block_size=41,
-                 margin=60,
-                 resize_factor=2,
-                 convert_grayscale=True,
-                 shift_channels=True,
-                 label_components=False,
-                 debug_image_callback=None):
+                 tesseract_command=r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
         self.tesseract_data_path = tesseract_data_path
         self.tesseract_command = tesseract_command
         self.threshold_function = threshold_function
@@ -138,8 +166,9 @@ class ScreenContents(object):
         indices = []
         for index, result in self._ocr_df.iterrows():
             text = result.text
-            text = text if isinstance(text, basestring) else str(text)
-            if lowercase_word in text.lower():
+            text = six.text_type(text, encoding="utf-8") if isinstance(text, six.binary_type) else six.text_type(text)
+            # Standardize case and straighten apostrophes.
+            if lowercase_word in text.lower().replace(u'\u2019','\''):
                 indices.append(index)
         possible_matches = self._ocr_df.loc[indices]
         if possible_matches.empty:

@@ -11,8 +11,7 @@ import imagehash
 import pytesseract
 import numpy as np
 import pandas as pd
-from PIL import Image, ImageDraw, ImageGrab, ImageOps
-from skimage import filters, measure, morphology, transform
+from PIL import Image, ImageGrab
 from sklearn import model_selection
 from IPython.display import display
 
@@ -26,22 +25,6 @@ args = parser.parse_args()
 random.seed(517548236)
 
 os.chdir(r"C:\Users\james\Documents\OCR")
-for debug_output in glob.glob("debug*"):
-  os.remove(debug_output)
-
-# Load image and crop.
-# logs_example = "failure_1578861893.90"
-# image_path = "train/pillow_docs.png"
-# image_path = "logs/{}.png".format(logs_example)
-# image = Image.open(image_path).convert("RGB") #.crop(bounding_box)
-# image = ImageGrab.grab(bounding_box)
-
-# Load ground truth.
-# gt_path = "train/pillow_docs.txt"
-# gt_path = "logs/{}.txt".format(logs_example)
-# with open(gt_path, "r") as gt_file:
-#     gt_string = gt_file.read()
-
 text_files = set(glob.glob("logs/*.txt"))
 average_hashes = set()
 color_hashes = set()
@@ -85,16 +68,38 @@ for image_file, text_file in labeled_data:
         y.append(f.read())
 
 
+if args.verbose:
+    def debug_image_callback(name, image):
+        print("{}:".format(name))
+        display(image)
+else:
+    debug_image_callback = None
+ocr_reader = screen_ocr.Reader.create_quality_reader(
+    debug_image_callback=debug_image_callback)
+
+
 # Run OCR.
-data_path = r"C:\Program Files\Tesseract-OCR\tessdata"
-# data_path = r"C:\Users\james\tessdata_fast"
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-tessdata_dir_config = r'--tessdata-dir "{}"'.format(data_path)
-# TODO devise a better solution that doesn't allow a bunch of noise to result in zero costs
-zero_delete_costs = True
-with PyTessBaseAPI(path=data_path) as api:
+with PyTessBaseAPI(path=ocr_reader.tesseract_data_path) as api:
     if args.mode == "debug":
-        indices = range(len(X)) if args.all else [0]
+        debug_filenames = [
+            r"logs\failure_1581796330.95.png",
+            r"logs\failure_1590973817.17.png",
+            r"logs\failure_1590973805.00.png",
+            r"logs\failure_1581796274.95.png",
+            r"logs\failure_1590901824.09.png",
+            r"logs\failure_1590975497.71.png",
+            r"logs\failure_1586109111.24.png",
+            r"logs\failure_1590974683.00.png",
+            r"logs\failure_1586715290.52.png",
+            r"logs\failure_1586715287.73.png",
+            r"logs\failure_1590975577.31.png",
+            r"logs\failure_1580019964.01.png",
+            r"logs\failure_1585416092.33.png",
+            r"logs\failure_1578856303.59.png",
+        ]
+        debug_indices = [i for i, data in enumerate(labeled_data)
+                         if data[0] in debug_filenames]
+        indices = range(len(X)) if args.all else debug_indices
         for index in indices:
             print("Processing: {}".format(labeled_data[index][0]))
             image = X[index]
@@ -103,30 +108,6 @@ with PyTessBaseAPI(path=data_path) as api:
             display(image)
 
             # Preprocess the image.
-            block_size = None
-            threshold_function = lambda data: filters.threshold_otsu(data)
-            # threshold_function = lambda data: filters.rank.otsu(data, morphology.square(correction_block_size))
-            correction_block_size = 41
-            margin = 60
-            resize_factor = 2
-            convert_grayscale = True
-            shift_channels = True
-            label_components = False
-            if args.verbose:
-                def debug_image_callback(name, image):
-                    print("{}:".format(name))
-                    display(image)
-            else:
-                debug_image_callback = None
-            ocr_reader = screen_ocr.Reader(
-                threshold_function=threshold_function,
-                correction_block_size=correction_block_size,
-                margin=margin,
-                resize_factor=resize_factor,
-                convert_grayscale=convert_grayscale,
-                shift_channels=shift_channels,
-                label_components=label_components,
-                debug_image_callback=debug_image_callback)
             preprocessing_command = "global preprocessed_image; preprocessed_image = ocr_reader.preprocess(image)"
             preprocessing_time = timeit.timeit(preprocessing_command, globals=globals(), number=1)
             print("preprocessing time: {:f}".format(preprocessing_time))
@@ -135,16 +116,18 @@ with PyTessBaseAPI(path=data_path) as api:
 
             # Run OCR.
             print("Ground truth: {}".format(gt_string))
-            print("------------------")
-            native_string = None
-            native_time = timeit.timeit("global native_string; native_string = test_utils.native_image_to_string(preprocessed_image, api, debug_image_callback)", globals=globals(), number=1)
-            native_cost = test_utils.cost(native_string, gt_string, zero_delete_costs)
-            print("native\ttime: {:.2f}\tcost: {:.2f}".format(native_time, native_cost))
-            print("Native OCR: {}".format(native_string))
+            # print("------------------")
+            # native_string = None
+            # native_time = timeit.timeit("global native_string; native_string = test_utils.native_image_to_string(preprocessed_image, api, debug_image_callback)", globals=globals(), number=1)
+            # native_cost = test_utils.cost(native_string, gt_string)
+            # print("native\ttime: {:.2f}\tcost: {:.2f}".format(native_time, native_cost))
+            # print("Native OCR: {}".format(native_string))
             print("------------------")
             binary_string = None
+            tessdata_dir_config = r'--tessdata-dir "{}"'.format(ocr_reader.tesseract_data_path)
+            pytesseract.pytesseract.tesseract_cmd = ocr_reader.tesseract_command
             binary_time = timeit.timeit("global binary_string; binary_string = test_utils.binary_image_to_string(preprocessed_image, tessdata_dir_config, debug_image_callback)", globals=globals(), number=1)
-            binary_cost = test_utils.cost(binary_string, gt_string, zero_delete_costs)
+            binary_cost = test_utils.cost(binary_string, gt_string)
             print("binary\ttime: {:.2f}\tcost: {:.2f}".format(binary_time, binary_cost))
             print("Binary OCR: {}".format(binary_string))
             print("------------------")
@@ -152,13 +135,13 @@ with PyTessBaseAPI(path=data_path) as api:
         grid_search = model_selection.GridSearchCV(
             test_utils.OcrEstimator(),
             {
-                "threshold_type": ["otsu"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
-                "block_size": [None], # [51, 61, 71],
-                "correction_block_size": [36, 41, 46],
-                "margin": [50, 60, 70],
-                "resize_factor": [2], # , 3, 4],
+                "threshold_type": ["local_otsu", "local"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
+                "block_size": [51, 61, 71],
+                "correction_block_size": [21, 31, 41],
+                "margin": [40, 50, 60],
+                "resize_factor": [2],
                 "convert_grayscale": [True],
-                "shift_channels": [False, True],
+                "shift_channels": [True],
                 "label_components": [False],
             },
             # Evaluate each example separately so that standard deviation is automatically computed.

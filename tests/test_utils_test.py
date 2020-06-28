@@ -1,4 +1,4 @@
-from test_utils import *
+import test_utils
 import unittest
 
 
@@ -10,12 +10,17 @@ class TestUtilsTestCase(unittest.TestCase):
     def test_cost(self):
         gt = "test"
         self.assertLess(
-            cost("test", gt),
-            cost("text", gt))
+            test_utils.cost("test", gt),
+            test_utils.cost("text", gt))
 
         self.assertLess(
-            cost("ignore some test case ignore", gt),
-            cost("top elf saw top", gt))
+            test_utils.cost("ignore some test case ignore", gt),
+            test_utils.cost("top elf saw top", gt))
+
+        # TODO Make this pass.
+        # self.assertLess(
+        #     test_utils.cost("t asdfasdfasdf est case ignore", gt),
+        #     test_utils.cost("asdfasdfasdf st case ignore", gt))
     
 
 if __name__ == "__main__":

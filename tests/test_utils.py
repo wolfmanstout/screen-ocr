@@ -1,7 +1,7 @@
+import difflib
 import screen_ocr
 from tesserocr import RIL
 import pytesseract
-from weighted_levenshtein import lev
 import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw, ImageGrab, ImageOps
@@ -84,12 +84,36 @@ def binary_image_to_string(image, config, debug_image_callback):
     return "\n".join(text_lines)
 
 
-low_costs = np.ones(128, dtype=np.float64) * 0.1
-zero_costs = np.zeros(128, dtype=np.float64)
-def cost(result, gt, zero_delete_costs=False):
-    delete_costs = zero_costs if zero_delete_costs else low_costs
-    # lev() appears to require ASCII encoding.
-    return lev(result.encode("ascii", errors="ignore").lower(), gt.lower(), delete_costs=delete_costs)
+def cost(result, gt):
+    matcher = difflib.SequenceMatcher(None, gt.lower(), result.lower(), autojunk=False)
+    ops = matcher.get_opcodes()
+
+    # Remove insertions at the beginning and end
+    first_non_insert = -1
+    for index, op in enumerate(ops):
+        if op[0] != "insert":
+            first_non_insert = index
+            break
+    last_non_insert = -1
+    for index, op in reversed(list(enumerate(ops))):
+        if op[0] != "insert":
+            last_non_insert = index
+            break
+    if first_non_insert == -1:
+        ops = []
+    else:
+        ops = ops[first_non_insert:(last_non_insert+1)]
+
+    # Compute cost.
+    cost = 0
+    for op in ops:
+        if op[0] == "equal":
+            continue
+        elif op[0] in ("replace", "insert", "delete"):
+            cost += max(op[2] - op[1], op[4] - op[3])
+        else:
+            raise AssertionError("Unexpected op: {}".format(op[0]))
+    return min(cost, len(gt)) / len(gt)
 
 
 class OcrEstimator(BaseEstimator):
@@ -140,8 +164,10 @@ class OcrEstimator(BaseEstimator):
             image = self.ocr_reader_.preprocess(image)
             # Assume "api" is set globally. This is easier than making it a
             # param because it does not support deepcopy.
+            tessdata_dir_config = r'--tessdata-dir "{}"'.format(self.ocr_reader_.tesseract_data_path)
+            pytesseract.pytesseract.tesseract_cmd = self.ocr_reader_.tesseract_command
             result = binary_image_to_string(image, tessdata_dir_config, debug_image_callback=None)
-            error += cost(result, gt_text, zero_delete_costs)
+            error += cost(result, gt_text)
         return -error
             
 
