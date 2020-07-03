@@ -84,7 +84,7 @@ class Reader(object):
 
 
     def _find_words_in_image(self, image):
-        preprocessed_image = self.preprocess(image)
+        preprocessed_image = self._preprocess(image)
         tessdata_dir_config = r'--tessdata-dir "{}"'.format(self.tesseract_data_path)
         pytesseract.pytesseract.tesseract_cmd = self.tesseract_command
         results = pytesseract.image_to_data(preprocessed_image,
@@ -94,7 +94,7 @@ class Reader(object):
         results[["width", "height"]] = results[["width", "height"]] / self.resize_factor
         return results
 
-    def preprocess(self, image):
+    def _preprocess(self, image):
         new_size = (image.size[0] * self.resize_factor, image.size[1] * self.resize_factor)
         image = image.resize(new_size, Image.NEAREST)
         if self.debug_image_callback:

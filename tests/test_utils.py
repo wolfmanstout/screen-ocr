@@ -161,7 +161,7 @@ class OcrEstimator(BaseEstimator):
     def score(self, X, y):
         error = 0
         for image, gt_text in zip(X, y):
-            image = self.ocr_reader_.preprocess(image)
+            image = self.ocr_reader_._preprocess(image)
             # Assume "api" is set globally. This is easier than making it a
             # param because it does not support deepcopy.
             tessdata_dir_config = r'--tessdata-dir "{}"'.format(self.ocr_reader_.tesseract_data_path)

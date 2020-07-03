@@ -108,7 +108,7 @@ with PyTessBaseAPI(path=ocr_reader.tesseract_data_path) as api:
             display(image)
 
             # Preprocess the image.
-            preprocessing_command = "global preprocessed_image; preprocessed_image = ocr_reader.preprocess(image)"
+            preprocessing_command = "global preprocessed_image; preprocessed_image = ocr_reader._preprocess(image)"
             preprocessing_time = timeit.timeit(preprocessing_command, globals=globals(), number=1)
             print("preprocessing time: {:f}".format(preprocessing_time))
             print("Preprocessed:")
