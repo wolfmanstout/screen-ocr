@@ -1,4 +1,5 @@
 import difflib
+from fuzzywuzzy import fuzz
 import screen_ocr
 from tesserocr import RIL
 import pytesseract
@@ -85,35 +86,7 @@ def binary_image_to_string(image, config, debug_image_callback):
 
 
 def cost(result, gt):
-    matcher = difflib.SequenceMatcher(None, gt.lower(), result.lower(), autojunk=False)
-    ops = matcher.get_opcodes()
-
-    # Remove insertions at the beginning and end
-    first_non_insert = -1
-    for index, op in enumerate(ops):
-        if op[0] != "insert":
-            first_non_insert = index
-            break
-    last_non_insert = -1
-    for index, op in reversed(list(enumerate(ops))):
-        if op[0] != "insert":
-            last_non_insert = index
-            break
-    if first_non_insert == -1:
-        ops = []
-    else:
-        ops = ops[first_non_insert:(last_non_insert+1)]
-
-    # Compute cost.
-    cost = 0
-    for op in ops:
-        if op[0] == "equal":
-            continue
-        elif op[0] in ("replace", "insert", "delete"):
-            cost += max(op[2] - op[1], op[4] - op[3])
-        else:
-            raise AssertionError("Unexpected op: {}".format(op[0]))
-    return min(cost, len(gt)) / len(gt)
+    return -fuzz.partial_ratio(result.lower(), gt.lower())
 
 
 class OcrEstimator(BaseEstimator):

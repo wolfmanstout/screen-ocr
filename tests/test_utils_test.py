@@ -17,10 +17,9 @@ class TestUtilsTestCase(unittest.TestCase):
             test_utils.cost("ignore some test case ignore", gt),
             test_utils.cost("top elf saw top", gt))
 
-        # TODO Make this pass.
-        # self.assertLess(
-        #     test_utils.cost("t asdfasdfasdf est case ignore", gt),
-        #     test_utils.cost("asdfasdfasdf st case ignore", gt))
+        self.assertLess(
+            test_utils.cost("t asdfasdfasdf est case ignore", gt),
+            test_utils.cost("asdfasdfasdf st case ignore", gt))
     
 
 if __name__ == "__main__":

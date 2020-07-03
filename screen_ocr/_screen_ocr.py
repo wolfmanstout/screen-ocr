@@ -5,6 +5,7 @@
 """Library for processing screen contents using OCR."""
 
 import enum
+from fuzzywuzzy import fuzz
 import pytesseract
 import numpy as np
 import six
@@ -49,20 +50,22 @@ class Reader(object):
                  shift_channels,
                  label_components,
                  radius=100,
+                 confidence_threshold=0.75,
                  debug_image_callback=None,
                  tesseract_data_path=r"C:\Program Files\Tesseract-OCR\tessdata",
                  tesseract_command=r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
-        self.tesseract_data_path = tesseract_data_path
-        self.tesseract_command = tesseract_command
         self.threshold_function = threshold_function
         self.correction_block_size = correction_block_size
         self.margin = margin
         self.resize_factor = resize_factor
         self.convert_grayscale = convert_grayscale
         self.shift_channels = shift_channels
-        self.radius = radius
         self.label_components = label_components
+        self.radius = radius
+        self.confidence_threshold = confidence_threshold
         self.debug_image_callback = debug_image_callback
+        self.tesseract_data_path = tesseract_data_path
+        self.tesseract_command = tesseract_command
 
     def read_nearby(self, screen_coordinates):
         # TODO Consider cropping within grab() for performance. Requires knowledge
@@ -74,7 +77,11 @@ class Reader(object):
         # Adjust bounding box offsets based on screenshot offset.
         ocr_df["left"] += bounding_box[0]
         ocr_df["top"] += bounding_box[1]
-        return ScreenContents(screen_coordinates, screenshot, bounding_box, ocr_df)
+        return ScreenContents(screen_coordinates,
+                              screenshot,
+                              bounding_box,
+                              ocr_df,
+                              self.confidence_threshold)
 
     def _nearby_bounding_box(self, screen_coordinates, screenshot):
         return (max(0, screen_coordinates[0] - self.radius),
@@ -196,34 +203,48 @@ class Reader(object):
 
 
 class ScreenContents(object):
-    def __init__(self, screen_coordinates, screenshot, bounding_box, ocr_df):
+    def __init__(self,
+                 screen_coordinates,
+                 screenshot,
+                 bounding_box,
+                 ocr_df,
+                 confidence_threshold):
         self.screen_coordinates = screen_coordinates
         self.screenshot = screenshot
         self.bounding_box = bounding_box
         self._ocr_df = ocr_df
+        self.confidence_threshold = confidence_threshold
 
     def find_nearest_word_coordinates(self, word, cursor_position):
         lowercase_word = word.lower()
-        # TODO Investigate why this is >10X faster than the following:
-        # possible_matches = self._ocr_df[self._ocr_df.text.str.contains(word, case=False, na=False, regex=False)]
-        indices = []
+        # First, find all matches with minimal edit distance from the query word.
+        score_tuples = []
         for index, result in self._ocr_df.iterrows():
             text = result.text
             text = six.text_type(text, encoding="utf-8") if isinstance(text, six.binary_type) else six.text_type(text)
             # Standardize case and straighten apostrophes.
-            if lowercase_word in text.lower().replace(u'\u2019','\''):
-                indices.append(index)
-        possible_matches = self._ocr_df.loc[indices]
-        if possible_matches.empty:
+            text = text.lower().replace(u'\u2019','\'')
+            # Don't match words that are significantly shorter than the query.
+            if float(len(text)) / len(word) < self.confidence_threshold:
+                continue
+            ratio = fuzz.partial_ratio(word, text)
+            # Only consider reasonably confident matches.
+            if ratio / 100.0 < self.confidence_threshold:
+                continue
+            score_tuples.append((ratio, index))
+        if not score_tuples:
             return None
+        indices = [index for score, index in score_tuples if score == max(score_tuples)[0]]
 
+        # Next, find the closest match based on screen distance.
+        possible_matches = self._ocr_df.loc[indices]
         possible_matches["center_x"] = possible_matches["left"] + possible_matches["width"] / 2
         possible_matches["center_y"] = possible_matches["top"] + possible_matches["height"] / 2
-        possible_matches["_distance_squared"] = self._distance_squared(possible_matches["center_x"],
-                                                                       possible_matches["center_y"],
-                                                                       self.screen_coordinates[0],
-                                                                       self.screen_coordinates[1])
-        best_match = possible_matches.loc[possible_matches["_distance_squared"].idxmin()]
+        possible_matches["distance_squared"] = self._distance_squared(possible_matches["center_x"],
+                                                                      possible_matches["center_y"],
+                                                                      self.screen_coordinates[0],
+                                                                      self.screen_coordinates[1])
+        best_match = possible_matches.loc[possible_matches["distance_squared"].idxmin()]
         if cursor_position == CursorPosition.BEFORE:
             x = best_match["left"]
         elif cursor_position == CursorPosition.MIDDLE:
