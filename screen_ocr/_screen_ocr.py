@@ -48,6 +48,7 @@ class Reader(object):
                  convert_grayscale,
                  shift_channels,
                  label_components,
+                 radius=100,
                  debug_image_callback=None,
                  tesseract_data_path=r"C:\Program Files\Tesseract-OCR\tessdata",
                  tesseract_command=r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
@@ -59,6 +60,7 @@ class Reader(object):
         self.resize_factor = resize_factor
         self.convert_grayscale = convert_grayscale
         self.shift_channels = shift_channels
+        self.radius = radius
         self.label_components = label_components
         self.debug_image_callback = debug_image_callback
 
@@ -66,13 +68,20 @@ class Reader(object):
         # TODO Consider cropping within grab() for performance. Requires knowledge
         # of screen bounds.
         screenshot = ImageGrab.grab()
-        bounding_box = _nearby_bounding_box(screen_coordinates, screenshot)
+        bounding_box = self._nearby_bounding_box(screen_coordinates, screenshot)
         screenshot = screenshot.crop(bounding_box)
         ocr_df = self._find_words_in_image(screenshot)
         # Adjust bounding box offsets based on screenshot offset.
         ocr_df["left"] += bounding_box[0]
         ocr_df["top"] += bounding_box[1]
         return ScreenContents(screen_coordinates, screenshot, bounding_box, ocr_df)
+
+    def _nearby_bounding_box(self, screen_coordinates, screenshot):
+        return (max(0, screen_coordinates[0] - self.radius),
+                max(0, screen_coordinates[1] - self.radius),
+                min(screenshot.width, screen_coordinates[0] + self.radius),
+                min(screenshot.height, screen_coordinates[1] + self.radius))
+
 
     def _find_words_in_image(self, image):
         preprocessed_image = self.preprocess(image)
@@ -93,7 +102,7 @@ class Reader(object):
 
         data = np.array(image)
         if self.shift_channels:
-            channels = [_shift_channel(data[:, :, i], i) for i in range(3)]
+            channels = [self._shift_channel(data[:, :, i], i) for i in range(3)]
             data = np.stack(channels, axis=-1)
 
         if self.convert_grayscale:
@@ -138,8 +147,8 @@ class Reader(object):
                                                    morphology.square(self.correction_block_size))
             background_colors = label_colors[background_labels]
         else:
-            white_sums = _window_sums(data, self.correction_block_size)
-            black_sums = _window_sums(~data, self.correction_block_size)
+            white_sums = self._window_sums(data, self.correction_block_size)
+            black_sums = self._window_sums(~data, self.correction_block_size)
             background_colors = white_sums > black_sums
             # background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
             #                                        morphology.square(self.correction_block_size))
@@ -149,6 +158,40 @@ class Reader(object):
         data = data == background_colors
         if self.debug_image_callback:
             self.debug_image_callback("debug_after_{}".format(channel_index), Image.fromarray(data))
+        return data
+
+    @staticmethod
+    def _window_sums(image, window_size):
+        integral = transform.integral_image(image)
+        radius = int((window_size - 1) / 2)
+        top_left = np.zeros(image.shape, dtype=np.uint16)
+        top_left[radius:, radius:] = integral[:-radius, :-radius]
+        top_right = np.zeros(image.shape, dtype=np.uint16)
+        top_right[radius:, :-radius] = integral[:-radius, radius:]
+        top_right[radius:, -radius:] = integral[:-radius, -1:]
+        bottom_left = np.zeros(image.shape, dtype=np.uint16)
+        bottom_left[:-radius, radius:] = integral[radius:, :-radius]
+        bottom_left[-radius:, radius:] = integral[-1:, :-radius]
+        bottom_right = np.zeros(image.shape, dtype=np.uint16)
+        bottom_right[:-radius, :-radius] = integral[radius:, radius:]
+        bottom_right[-radius:, :-radius] = integral[-1:, radius:]
+        bottom_right[:-radius, -radius:] = integral[radius:, -1:]
+        bottom_right[-radius:, -radius:] = integral[-1, -1]
+        return bottom_right - bottom_left - top_right + top_left
+
+    @staticmethod
+    def _shift_channel(data, channel_index):
+        """Shifts each channel based on actual position in a typical LCD. This reduces
+        artifacts from subpixel rendering. Note that this assumes RGB left-to-right
+        ordering and a subpixel size of 1 in the resized image.
+        """
+        channel_shift = channel_index - 1
+        if channel_shift != 0:
+            data = np.roll(data, channel_shift, axis=1)
+            if channel_shift == -1:
+                data[:, -1] = data[:, -2]
+            elif channel_shift == 1:
+                data[:, 0] = data[:, 1]
         return data
 
 
@@ -176,10 +219,10 @@ class ScreenContents(object):
 
         possible_matches["center_x"] = possible_matches["left"] + possible_matches["width"] / 2
         possible_matches["center_y"] = possible_matches["top"] + possible_matches["height"] / 2
-        possible_matches["_distance_squared"] = _distance_squared(possible_matches["center_x"],
-                                                                possible_matches["center_y"],
-                                                                self.screen_coordinates[0],
-                                                                self.screen_coordinates[1])
+        possible_matches["_distance_squared"] = self._distance_squared(possible_matches["center_x"],
+                                                                       possible_matches["center_y"],
+                                                                       self.screen_coordinates[0],
+                                                                       self.screen_coordinates[1])
         best_match = possible_matches.loc[possible_matches["_distance_squared"].idxmin()]
         if cursor_position == CursorPosition.BEFORE:
             x = best_match["left"]
@@ -188,6 +231,12 @@ class ScreenContents(object):
         elif cursor_position == CursorPosition.AFTER:
             x = best_match["left"] + best_match["width"]
         return (x, best_match["center_y"])
+
+    @staticmethod
+    def _distance_squared(x1, y1, x2, y2):
+        x_dist = (x1 - x2)
+        y_dist = (y1 - y2)
+        return x_dist * x_dist + y_dist * y_dist
 
 
 class CursorPosition(enum.Enum):
@@ -201,50 +250,3 @@ class CursorPosition(enum.Enum):
 
     AFTER = 3
     """The position after the text."""
-
-
-def _nearby_bounding_box(screen_coordinates, screenshot, radius=100):
-    return (max(0, screen_coordinates[0] - radius),
-            max(0, screen_coordinates[1] - radius),
-            min(screenshot.width, screen_coordinates[0] + radius),
-            min(screenshot.height, screen_coordinates[1] + radius))
-
-
-def _distance_squared(x1, y1, x2, y2):
-    x_dist = (x1 - x2)
-    y_dist = (y1 - y2)
-    return x_dist * x_dist + y_dist * y_dist
-
-
-def _window_sums(image, window_size):
-    integral = transform.integral_image(image)
-    radius = int((window_size - 1) / 2)
-    top_left = np.zeros(image.shape, dtype=np.uint16)
-    top_left[radius:, radius:] = integral[:-radius, :-radius]
-    top_right = np.zeros(image.shape, dtype=np.uint16)
-    top_right[radius:, :-radius] = integral[:-radius, radius:]
-    top_right[radius:, -radius:] = integral[:-radius, -1:]
-    bottom_left = np.zeros(image.shape, dtype=np.uint16)
-    bottom_left[:-radius, radius:] = integral[radius:, :-radius]
-    bottom_left[-radius:, radius:] = integral[-1:, :-radius]
-    bottom_right = np.zeros(image.shape, dtype=np.uint16)
-    bottom_right[:-radius, :-radius] = integral[radius:, radius:]
-    bottom_right[-radius:, :-radius] = integral[-1:, radius:]
-    bottom_right[:-radius, -radius:] = integral[radius:, -1:]
-    bottom_right[-radius:, -radius:] = integral[-1, -1]
-    return bottom_right - bottom_left - top_right + top_left
-
-
-def _shift_channel(data, channel_index):
-    """Shifts each channel based on actual position in a typical LCD. This reduces
-    artifacts from subpixel rendering. Note that this assumes RGB left-to-right
-    ordering and a subpixel size of 1 in the resized image.
-    """
-    channel_shift = channel_index - 1
-    if channel_shift != 0:
-        data = np.roll(data, channel_shift, axis=1)
-        if channel_shift == -1:
-            data[:, -1] = data[:, -2]
-        elif channel_shift == 1:
-            data[:, 0] = data[:, 1]
-    return data
