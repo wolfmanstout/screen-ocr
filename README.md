@@ -2,4 +2,8 @@
 
 The `screen_ocr` package makes it easy to perform OCR on portions of the screen.
 
-This package is a work-in-progress. I plan to completely rewrite the API.
+## Installation
+
+Install [Tesseract for
+Windows](https://github.com/UB-Mannheim/tesseract/wiki). If not using the
+default location, set the path when constructing a `Reader` instance.
