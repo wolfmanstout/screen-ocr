@@ -14,21 +14,18 @@ setuptools.setup(
     url="https://github.com/wolfmanstout/screen-ocr",
     packages=["screen_ocr"],
     install_requires=[
+        "fuzzywuzzy[speedup]",
         "numpy",
         "pandas",
         "pillow",
         "pytesseract",
         "scikit-image",
+        'enum34; python_version < "3.4"',
     ],
-    extra_requires={
-        ':python_version<="3.4"': [
-          'enum34'
-        ]
-    },
     classifiers=[
         "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
+        "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
 )

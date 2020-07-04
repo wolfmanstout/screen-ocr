@@ -1,15 +1,12 @@
-#!/usr/bin/env python
-# (c) Copyright 2020 by James Stout
-# Licensed under the LGPL, see <http://www.gnu.org/licenses/>
-
 """Library for processing screen contents using OCR."""
 
 import enum
-from fuzzywuzzy import fuzz
-import pytesseract
+
 import numpy as np
+import pytesseract
 import six
 from PIL import Image, ImageGrab, ImageOps
+from fuzzywuzzy import fuzz
 from skimage import filters, morphology, transform
 
 
@@ -251,7 +248,7 @@ class ScreenContents(object):
             x = best_match["center_x"]
         elif cursor_position == CursorPosition.AFTER:
             x = best_match["left"] + best_match["width"]
-        return (x, best_match["center_y"])
+        return (int(x), int(best_match["center_y"]))
 
     @staticmethod
     def _distance_squared(x1, y1, x2, y2):
