@@ -20,7 +20,6 @@ setuptools.setup(
         "pillow",
         "pytesseract",
         "scikit-image",
-        'enum34; python_version < "3.4"',
     ],
     classifiers=[
         "Programming Language :: Python :: 2",

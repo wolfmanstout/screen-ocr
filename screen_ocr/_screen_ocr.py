@@ -1,7 +1,5 @@
 """Library for processing screen contents using OCR."""
 
-import enum
-
 import numpy as np
 import pytesseract
 import six
@@ -213,6 +211,13 @@ class ScreenContents(object):
         self.confidence_threshold = confidence_threshold
 
     def find_nearest_word_coordinates(self, word, cursor_position):
+        """Returns the coordinates of the nearest instance of the provided word.
+
+        Uses fuzzy matching.
+        cursor_position: "before", "middle", or "after" (relative to the matching word)
+        """
+        if cursor_position not in ("before", "middle", "after"):
+            raise ValueError("cursor_position must be either before, middle, or after")
         lowercase_word = word.lower()
         # First, find all matches with minimal edit distance from the query word.
         score_tuples = []
@@ -242,11 +247,11 @@ class ScreenContents(object):
                                                                       self.screen_coordinates[0],
                                                                       self.screen_coordinates[1])
         best_match = possible_matches.loc[possible_matches["distance_squared"].idxmin()]
-        if cursor_position == CursorPosition.BEFORE:
+        if cursor_position == "before":
             x = best_match["left"]
-        elif cursor_position == CursorPosition.MIDDLE:
+        elif cursor_position == "middle":
             x = best_match["center_x"]
-        elif cursor_position == CursorPosition.AFTER:
+        elif cursor_position == "after":
             x = best_match["left"] + best_match["width"]
         return (int(x), int(best_match["center_y"]))
 
@@ -255,16 +260,3 @@ class ScreenContents(object):
         x_dist = (x1 - x2)
         y_dist = (y1 - y2)
         return x_dist * x_dist + y_dist * y_dist
-
-
-class CursorPosition(enum.Enum):
-    """The cursor position relative to a range of text."""
-
-    BEFORE = 1
-    """The position before the text."""
-
-    MIDDLE = 2
-    """The position in the middle of the text."""
-
-    AFTER = 3
-    """The position after the text."""
