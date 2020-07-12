@@ -1,3 +1,4 @@
+easyocr
 fuzzywuzzy[speedup]
 imagehash
 numpy
@@ -6,4 +7,3 @@ pillow
 pytesseract
 scikit-image
 scikit-learn
-tesserocr

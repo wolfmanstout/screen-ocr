@@ -1,42 +1,14 @@
 import difflib
-from fuzzywuzzy import fuzz
-import screen_ocr
-from tesserocr import RIL
-import pytesseract
+
+import easyocr
 import numpy as np
 import pandas as pd
+import pytesseract
+import screen_ocr
 from PIL import Image, ImageDraw, ImageGrab, ImageOps
+from fuzzywuzzy import fuzz
 from skimage import filters, measure, morphology, transform
 from sklearn.base import BaseEstimator
-
-def native_image_to_string(image, api, debug_image_callback):
-    api.SetImage(image)
-    # return api.GetUTF8Text()
-    debug_image = image.convert("RGB")
-    if debug_image_callback:
-        draw = ImageDraw.Draw(debug_image)
-    result = ""
-    boxes = api.GetComponentImages(RIL.TEXTLINE, True)
-    boxes = sorted(boxes, key=lambda box: (box[1]["y"], box[1]["x"]))
-    text_lines = []
-    for _, box, _, _ in boxes:
-        api.SetRectangle(box["x"], box["y"], box["w"], box["h"])
-        # if api.MeanTextConf() < 50:
-        #     continue
-        if debug_image_callback:
-            draw.line([box["x"], box["y"],
-                       box["x"] + box["w"], box["y"],
-                       box["x"] + box["w"], box["y"] + box["h"],
-                       box["x"], box["y"] + box["h"],
-                       box["x"], box["y"]],
-                      fill=(255 - (api.MeanTextConf() * 255 // 100), api.MeanTextConf() * 255 // 100, 0),
-                      width=4)
-        text_lines.append(api.GetUTF8Text())
-    if debug_image_callback:
-        del draw
-        debug_image_callback("debug_boxes_native", debug_image)
-    return "".join(text_lines)
-
 
 def binary_image_to_string(image, config, debug_image_callback):
     # return pytesseract.image_to_string(image, config=config)
@@ -82,6 +54,11 @@ def binary_image_to_string(image, config, debug_image_callback):
     if debug_image_callback:
         del draw
         debug_image_callback("debug_boxes_binary", debug_image)
+    return "\n".join(text_lines)
+
+
+def easyocr_image_to_string(image, reader):
+    text_lines = [line for box, line, confidence in reader.readtext(np.array(image))]
     return "\n".join(text_lines)
 
 
