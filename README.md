@@ -1,6 +1,6 @@
 # Screen OCR
 
-The `screen_ocr` package makes it easy to perform OCR on portions of the screen.
+The `screen-ocr` package makes it easy to perform OCR on portions of the screen.
 
 ## Installation
 
