@@ -9,6 +9,8 @@ from skimage import filters, morphology, transform
 
 
 class Reader(object):
+    """Reads on-screen text using OCR."""
+
     @classmethod
     def create_quality_reader(cls, **kwargs):
         """Create reader optimized for quality. See constructor for full argument list."""
@@ -63,6 +65,7 @@ class Reader(object):
         self.tesseract_command = tesseract_command
 
     def read_nearby(self, screen_coordinates):
+        """Return ScreenContents nearby the provided coordinates."""
         # TODO Consider cropping within grab() for performance. Requires knowledge
         # of screen bounds.
         screenshot = ImageGrab.grab()
@@ -198,6 +201,8 @@ class Reader(object):
 
 
 class ScreenContents(object):
+    """OCR'd contents of a portion of the screen."""
+
     def __init__(self,
                  screen_coordinates,
                  screenshot,
@@ -207,13 +212,16 @@ class ScreenContents(object):
         self.screen_coordinates = screen_coordinates
         self.screenshot = screenshot
         self.bounding_box = bounding_box
-        self._ocr_df = ocr_df
+        self.ocr_df = ocr_df
         self.confidence_threshold = confidence_threshold
 
     def find_nearest_word_coordinates(self, word, cursor_position):
-        """Returns the coordinates of the nearest instance of the provided word.
+        """Return the coordinates of the nearest instance of the provided word.
 
         Uses fuzzy matching.
+
+        Arguments:
+        word: The word to search for.
         cursor_position: "before", "middle", or "after" (relative to the matching word)
         """
         if cursor_position not in ("before", "middle", "after"):
@@ -221,7 +229,7 @@ class ScreenContents(object):
         lowercase_word = word.lower()
         # First, find all matches with minimal edit distance from the query word.
         score_tuples = []
-        for index, result in self._ocr_df.iterrows():
+        for index, result in self.ocr_df.iterrows():
             text = result.text
             text = six.text_type(text, encoding="utf-8") if isinstance(text, six.binary_type) else six.text_type(text)
             # Standardize case and straighten apostrophes.
@@ -239,7 +247,7 @@ class ScreenContents(object):
         indices = [index for score, index in score_tuples if score == max(score_tuples)[0]]
 
         # Next, find the closest match based on screen distance.
-        possible_matches = self._ocr_df.loc[indices]
+        possible_matches = self.ocr_df.loc[indices]
         possible_matches["center_x"] = possible_matches["left"] + possible_matches["width"] / 2
         possible_matches["center_y"] = possible_matches["top"] + possible_matches["height"] / 2
         possible_matches["distance_squared"] = self._distance_squared(possible_matches["center_x"],

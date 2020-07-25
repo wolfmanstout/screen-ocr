@@ -4,13 +4,14 @@ The `screen_ocr` package makes it easy to perform OCR on portions of the screen.
 
 ## Installation
 
-NOTE: This package will eventually be shared on PyPI for easier installation.
-
-1. Install [Tesseract for
-Windows](https://github.com/UB-Mannheim/tesseract/wiki).
-2. Install this package (e.g. `pip install -e <path to cloned repository>`).
+1. Install Tesseract binaries. For Windows, see
+https://github.com/UB-Mannheim/tesseract/wiki.
+2. `pip install screen-ocr`
 
 ## Usage
 
-If not using the default location, set the path when constructing a `Reader`
-instance.
+See https://github.com/wolfmanstout/gaze-ocr for sample usage.
+
+If not using the default Tesseract location on Windows, set
+`tesseract_data_path` and `tesseract_command` paths aappropriately when
+constructing a `Reader` instance.
