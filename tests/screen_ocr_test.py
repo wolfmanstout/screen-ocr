@@ -4,13 +4,10 @@ import os
 import random
 import timeit
 
-import easyocr
 import imagehash
-import numpy as np
 import pandas as pd
-import pytesseract
 from IPython.display import display
-from PIL import Image, ImageGrab
+from PIL import Image
 from sklearn import model_selection
 
 import screen_ocr
@@ -75,7 +72,8 @@ if args.verbose:
         display(image)
 else:
     debug_image_callback = None
-ocr_reader = screen_ocr.Reader.create_quality_reader(
+ocr_reader = screen_ocr.Reader.create_reader(
+    "tesseract",
     debug_image_callback=debug_image_callback)
 
 
@@ -100,7 +98,6 @@ if args.mode == "debug":
     debug_indices = [i for i, data in enumerate(labeled_data)
                      if data[0] in debug_filenames]
     indices = range(len(X)) if args.all else debug_indices
-    easyocr_reader = easyocr.Reader(["en"])
     for index in indices:
         print("Processing: {}".format(labeled_data[index][0]))
         image = X[index]
@@ -108,38 +105,22 @@ if args.mode == "debug":
         print("Unprocessed:")
         display(image)
 
-        # Preprocess the image.
-        preprocessing_command = "global preprocessed_image; preprocessed_image = ocr_reader._preprocess(image)"
-        preprocessing_time = timeit.timeit(preprocessing_command, globals=globals(), number=1)
-        print("preprocessing time: {:f}".format(preprocessing_time))
-        print("Preprocessed:")
-        display(preprocessed_image)
-
         # Run OCR.
         print("Ground truth: {}".format(gt_string))
         print("------------------")
-        binary_string = None
-        tessdata_dir_config = r'--tessdata-dir "{}"'.format(ocr_reader.tesseract_data_path)
-        pytesseract.pytesseract.tesseract_cmd = ocr_reader.tesseract_command
-        binary_time = timeit.timeit("global binary_string; binary_string = test_utils.binary_image_to_string(preprocessed_image, tessdata_dir_config, debug_image_callback)", globals=globals(), number=1)
-        binary_cost = test_utils.cost(binary_string, gt_string)
-        print("binary\ttime: {:.2f}\tcost: {:.2f}".format(binary_time, binary_cost))
-        print("Binary OCR: {}".format(binary_string))
-        print("------------------")
-        easyocr_string = None
-        easyocr_time = timeit.timeit("global easyocr_string; easyocr_string = test_utils.easyocr_image_to_string(image, easyocr_reader)", globals=globals(), number=1)
-        easyocr_cost = test_utils.cost(easyocr_string, gt_string)
-        print("EasyOCR\ttime: {:.2f}\tcost: {:.2f}".format(easyocr_time, easyocr_cost))
-        print("EasyOCR OCR: {}".format(easyocr_string))
-        print("------------------")
+        ocr_text = None
+        ocr_time = timeit.timeit("global ocr_text; ocr_text = ocr_reader.read_image(image).as_string()", globals=globals(), number=1)
+        ocr_cost = test_utils.cost(ocr_text, gt_string)
+        print("time: {:.2f}\tcost: {:.2f}\ntext: {}".format(ocr_time, ocr_cost, ocr_text))
 elif args.mode == "grid_search":
     grid_search = model_selection.GridSearchCV(
         test_utils.OcrEstimator(),
         {
-            "threshold_type": ["local_otsu", "local"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
-            "block_size": [51, 61, 71],
-            "correction_block_size": [21, 31, 41],
-            "margin": [40, 50, 60],
+            "backend": ["tesseract", "easyocr", "winrt"],
+            "threshold_type": ["local_otsu"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
+            "block_size": [41],
+            "correction_block_size": [31],
+            "margin": [50],
             "resize_factor": [2],
             "convert_grayscale": [True],
             "shift_channels": [True],
