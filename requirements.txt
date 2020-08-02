@@ -1,4 +1,3 @@
-easyocr
 fuzzywuzzy[speedup]
 imagehash
 numpy

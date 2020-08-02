@@ -11,8 +11,6 @@ from . import _utils
 
 
 class TesseractReader(_base.BaseReader):
-    """Reads on-screen text using OCR."""
-
     def __init__(self,
                  threshold_function,
                  correction_block_size,
@@ -235,14 +233,6 @@ class TesseractScreenContents(_base.BaseScreenContents):
         return "\n".join(text_lines)
 
     def find_nearest_word_coordinates(self, word, cursor_position):
-        """Return the coordinates of the nearest instance of the provided word.
-
-        Uses fuzzy matching.
-
-        Arguments:
-        word: The word to search for.
-        cursor_position: "before", "middle", or "after" (relative to the matching word)
-        """
         if cursor_position not in ("before", "middle", "after"):
             raise ValueError("cursor_position must be either before, middle, or after")
         lowercase_word = word.lower()
