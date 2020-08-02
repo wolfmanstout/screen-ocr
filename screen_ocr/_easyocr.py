@@ -5,7 +5,7 @@ from . import _base
 
 
 class EasyOcrBackend(_base.OcrBackend):
-    def __init__(self, **kwargs):
+    def __init__(self):
         self._easyocr = easyocr.Reader(["en"])
 
     def run_ocr(self, image):

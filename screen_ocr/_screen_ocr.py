@@ -71,12 +71,14 @@ class Reader(object):
                       backend,
                       confidence_threshold=None,
                       radius=None,
+                      debug_image_callback=None,
                       **kwargs):
         """Create reader with specified backend."""
         if backend == "tesseract":
             return cls.create_quality_reader(
                 confidence_threshold=confidence_threshold,
                 radius=radius,
+                debug_image_callback=debug_image_callback,
                 **kwargs)
         elif backend == "easyocr":
             backend = _easyocr.EasyOcrBackend(**kwargs)
