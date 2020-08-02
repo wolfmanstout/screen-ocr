@@ -3,14 +3,12 @@ import pandas as pd
 import pytesseract
 import six
 from PIL import Image, ImageDraw, ImageGrab, ImageOps
-from fuzzywuzzy import fuzz
 from skimage import filters, morphology, transform
 
 from . import _base
-from . import _utils
 
 
-class TesseractReader(_base.BaseReader):
+class TesseractBackend(_base.OcrBackend):
     def __init__(self,
                  threshold_function,
                  correction_block_size,
@@ -19,13 +17,9 @@ class TesseractReader(_base.BaseReader):
                  convert_grayscale,
                  shift_channels,
                  label_components,
-                 radius=100,
-                 confidence_threshold=0.75,
                  debug_image_callback=None,
-                 backend="tesseract",
                  tesseract_data_path=r"C:\Program Files\Tesseract-OCR\tessdata",
                  tesseract_command=r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
-        self.backend = backend
         self.threshold_function = threshold_function
         self.correction_block_size = correction_block_size
         self.margin = margin
@@ -33,35 +27,11 @@ class TesseractReader(_base.BaseReader):
         self.convert_grayscale = convert_grayscale
         self.shift_channels = shift_channels
         self.label_components = label_components
-        self.radius = radius
-        self.confidence_threshold = confidence_threshold
         self.debug_image_callback = debug_image_callback
         self.tesseract_data_path = tesseract_data_path
         self.tesseract_command = tesseract_command
 
-    def read_nearby(self, screen_coordinates):
-        screenshot, bounding_box = _utils.screenshot_nearby(screen_coordinates, self.radius)
-        ocr_df = self._find_words_in_image(screenshot)
-        # Adjust bounding box offsets based on screenshot offset.
-        ocr_df["left"] += bounding_box[0]
-        ocr_df["top"] += bounding_box[1]
-        return TesseractScreenContents(screen_coordinates=screen_coordinates,
-                                       screenshot=screenshot,
-                                       bounding_box=bounding_box,
-                                       ocr_df=ocr_df,
-                                       confidence_threshold=self.confidence_threshold,
-                                       debug_image_callback=self.debug_image_callback)
-
-    def read_image(self, image):
-        ocr_df = self._find_words_in_image(image)
-        return TesseractScreenContents(screen_coordinates=None,
-                                       screenshot=image,
-                                       bounding_box=(0, 0, image.width, image.height),
-                                       ocr_df=ocr_df,
-                                       confidence_threshold=self.confidence_threshold,
-                                       debug_image_callback=self.debug_image_callback)
-
-    def _find_words_in_image(self, image):
+    def run_ocr(self, image):
         preprocessed_image = self._preprocess(image)
         tessdata_dir_config = r'--tessdata-dir "{}"'.format(self.tesseract_data_path)
         pytesseract.pytesseract.tesseract_cmd = self.tesseract_command
@@ -70,7 +40,25 @@ class TesseractReader(_base.BaseReader):
                                             output_type=pytesseract.Output.DATAFRAME)
         results[["top", "left"]] = (results[["top", "left"]] - self.margin) / self.resize_factor
         results[["width", "height"]] = results[["width", "height"]] / self.resize_factor
-        return results
+        lines = []
+        words = []
+        for _, box in results.iterrows():
+            # Word
+            if box.level == 5:
+                text = box.text
+                text = (six.text_type(text, encoding="utf-8")
+                        if isinstance(text, six.binary_type)
+                        else six.text_type(text))
+                words.append(_base.OcrWord(text, box.left, box.top, box.width, box.height))
+            # End of line
+            if box.level == 4:
+                if words:
+                    lines.append(_base.OcrLine(words))
+                words = []
+        if words:
+            lines.append(_base.OcrLine(words))
+        lines.sort(key=lambda line: (line.words[0].top, line.words[0].left))
+        return _base.OcrResult(lines)
 
     def _preprocess(self, image):
         new_size = (image.size[0] * self.resize_factor, image.size[1] * self.resize_factor)
@@ -171,103 +159,3 @@ class TesseractReader(_base.BaseReader):
             elif channel_shift == 1:
                 data[:, 0] = data[:, 1]
         return data
-
-
-class TesseractScreenContents(_base.BaseScreenContents):
-    def __init__(self,
-                 screen_coordinates,
-                 screenshot,
-                 bounding_box,
-                 ocr_df,
-                 confidence_threshold,
-                 debug_image_callback):
-        self.screen_coordinates = screen_coordinates
-        self.screenshot = screenshot
-        self.bounding_box = bounding_box
-        self.ocr_df = ocr_df
-        self.confidence_threshold = confidence_threshold
-        self.debug_image_callback = debug_image_callback
-
-    def as_string(self):
-        debug_image = self.screenshot.convert("RGB")
-        if self.debug_image_callback:
-            draw = ImageDraw.Draw(debug_image)
-        result = ""
-        lines = []
-        words = []
-        confidences = []
-        for _, box in self.ocr_df.iterrows():
-            if box.level == 4:
-                if words:
-                    line_box.text = " ".join(words)
-                    line_box.conf = np.mean(confidences).astype(np.int32)
-                    lines.append(line_box)
-                words = []
-                confidences = []
-                line_box = box
-            if box.level == 5:
-                words.append(str(box.text))
-                confidences.append(box.conf)
-        if words:
-            line_box.text = " ".join(words)
-            lines.append(line_box)
-        line_boxes = pd.DataFrame(lines)
-        if not line_boxes.empty:
-            line_boxes = line_boxes.sort_values(by=["top", "left"])
-        text_lines = []
-        for box in line_boxes.itertuples():
-            # if not isinstance(box.conf, int) or box.conf < 0 or box.conf > 100:
-            #     continue
-            if self.debug_image_callback:
-                draw.line([box.left, box.top,
-                           box.left + box.width, box.top,
-                           box.left + box.width, box.top + box.height,
-                           box.left, box.top + box.height,
-                           box.left, box.top],
-                          fill=(255 - (box.conf * 255 // 100), box.conf * 255 // 100, 0),
-                          width=4)
-            text_lines.append(str(box.text))
-        if self.debug_image_callback:
-            del draw
-            self.debug_image_callback("debug_boxes_binary", debug_image)
-        return "\n".join(text_lines)
-
-    def find_nearest_word_coordinates(self, word, cursor_position):
-        if cursor_position not in ("before", "middle", "after"):
-            raise ValueError("cursor_position must be either before, middle, or after")
-        lowercase_word = word.lower()
-        # First, find all matches with minimal edit distance from the query word.
-        score_tuples = []
-        for index, result in self.ocr_df.iterrows():
-            text = result.text
-            text = six.text_type(text, encoding="utf-8") if isinstance(text, six.binary_type) else six.text_type(text)
-            # Standardize case and straighten apostrophes.
-            text = text.lower().replace(u'\u2019','\'')
-            # Don't match words that are significantly shorter than the query.
-            if float(len(text)) / len(word) < self.confidence_threshold:
-                continue
-            ratio = fuzz.partial_ratio(word, text)
-            # Only consider reasonably confident matches.
-            if ratio / 100.0 < self.confidence_threshold:
-                continue
-            score_tuples.append((ratio, index))
-        if not score_tuples:
-            return None
-        indices = [index for score, index in score_tuples if score == max(score_tuples)[0]]
-
-        # Next, find the closest match based on screen distance.
-        possible_matches = self.ocr_df.loc[indices]
-        possible_matches["center_x"] = possible_matches["left"] + possible_matches["width"] / 2
-        possible_matches["center_y"] = possible_matches["top"] + possible_matches["height"] / 2
-        possible_matches["distance_squared"] = _utils.distance_squared(possible_matches["center_x"],
-                                                                       possible_matches["center_y"],
-                                                                       self.screen_coordinates[0],
-                                                                       self.screen_coordinates[1])
-        best_match = possible_matches.loc[possible_matches["distance_squared"].idxmin()]
-        if cursor_position == "before":
-            x = best_match["left"]
-        elif cursor_position == "middle":
-            x = best_match["center_x"]
-        elif cursor_position == "after":
-            x = best_match["left"] + best_match["width"]
-        return (int(x), int(best_match["center_y"]))

@@ -4,19 +4,16 @@ import numpy as np
 from . import _base
 
 
-class EasyOcrReader(_base.BaseReader):
-    def __init__(self, radius=100, **kwargs):
-        self.radius = radius
+class EasyOcrBackend(_base.OcrBackend):
+    def __init__(self, **kwargs):
         self._easyocr = easyocr.Reader(["en"])
 
-    def read_image(self, image):
-        return EasyOcrScreenContents(self._easyocr.readtext(np.array(image)))
-
-
-class EasyOcrScreenContents(_base.BaseScreenContents):
-    def __init__(self, contents):
-        self.contents = contents
-
-    def as_string(self):
-        text_lines = [line for box, line, confidence in self.contents]
-        return "\n".join(text_lines)
+    def run_ocr(self, image):
+        result = self._easyocr.readtext(np.array(image))
+        lines = [_base.OcrLine([_base.OcrWord(text,
+                                              box[0][0],
+                                              box[0][1],
+                                              box[2][0] - box[0][0],
+                                              box[2][1] - box[0][1])])
+                 for box, text, confidence in result]
+        return _base.OcrResult(lines)

@@ -1,32 +1,28 @@
-"""Base classes."""
+"""Base classes used by backend implementations."""
 
+class OcrBackend(object):
+    """Base class for backend used to perform OCR."""
 
-class BaseReader(object):
-    """Reads on-screen text using OCR."""
-
-    def read_nearby(self, screen_coordinates):
-        """Return ScreenContents nearby the provided coordinates."""
-        raise NotImplementedError()
-
-    def read_image(self, image):
-        """Return ScreenContents of the provided image."""
+    def run_ocr(self, image):
+        """Return the OcrResult corresponding to the image."""
         raise NotImplementedError()
 
 
-class BaseScreenContents(object):
-    """OCR'd contents of a portion of the screen."""
+class OcrResult(object):
+    def __init__(self, lines):
+        self.lines = lines
 
-    def as_string(self):
-        """Return the contents formatted as a string."""
-        raise NotImplementedError()
 
-    def find_nearest_word_coordinates(self, word, cursor_position):
-        """Return the coordinates of the nearest instance of the provided word.
+class OcrLine(object):
+    def __init__(self, words):
+        self.words = words
 
-        Uses fuzzy matching.
 
-        Arguments:
-        word: The word to search for.
-        cursor_position: "before", "middle", or "after" (relative to the matching word)
-        """
-        raise NotImplementedError()
+class OcrWord:
+    def __init__(self, text, left, top, width, height):
+        self.text = text
+        self.left = left
+        self.top = top
+        self.width = width
+        self.height = height
+        self.center = (left + width / 2.0, top + height / 2.0)

@@ -3,23 +3,15 @@ import threading
 from concurrent import futures
 
 from . import _base
-from . import _utils
 
 
-class WinRtReader(_base.BaseReader):
-    def __init__(self, radius=100, **kwargs):
-        self.radius = radius
+class WinRtBackend(_base.OcrBackend):
+    def __init__(self, **kwargs):
         self._executor = futures.ThreadPoolExecutor(max_workers=1)
         self._executor.submit(self._init_winrt)
 
-    def read_nearby(self, screen_coordinates):
-        screenshot, bounding_box = _utils.screenshot_nearby(screen_coordinates, self.radius)
-        result = self._executor.submit(lambda: self._run_ocr_sync(screenshot)).result()
-        return WinRtScreenContents(result, (bounding_box[0], bounding_box[1]), screenshot, self._executor)
-        
-    def read_image(self, image):
-        result = self._executor.submit(lambda: self._run_ocr_sync(image)).result()
-        return WinRtScreenContents(result, (0, 0), image, self._executor)
+    def run_ocr(self, image):
+        return self._executor.submit(lambda: self._run_ocr_sync(image)).result()
 
     def _init_winrt(self):
         import winrt
@@ -33,31 +25,16 @@ class WinRtReader(_base.BaseReader):
             data_writer.write_bytes(list(bytes))
             bitmap = imaging.SoftwareBitmap(imaging.BitmapPixelFormat.RGBA8, image.width, image.height)
             bitmap.copy_from_buffer(data_writer.detach_buffer())
-            return await engine.recognize_async(bitmap)
+            result = await engine.recognize_async(bitmap)
+            lines = [_base.OcrLine([_base.OcrWord(word.text,
+                                                  word.bounding_rect.x,
+                                                  word.bounding_rect.y,
+                                                  word.bounding_rect.width,
+                                                  word.bounding_rect.height)
+                                    for word in line.words])
+                     for line in result.lines]
+            return _base.OcrResult(lines)
         self._run_ocr_async = run_ocr_async
 
     def _run_ocr_sync(self, image):
         return asyncio.run(self._run_ocr_async(image))
-
-
-class WinRtScreenContents(_base.BaseScreenContents):
-    def __init__(self, contents, offset, screenshot, executor):
-        self._contents = contents
-        self._offset = offset
-        self.screenshot = screenshot
-        self._executor = executor
-
-    def as_string(self):
-        return self._executor.submit(lambda: self._contents.text).result()
-
-    def find_nearest_word_coordinates(self, word, cursor_position):
-        if cursor_position not in ("before", "middle", "after"):
-            raise ValueError("cursor_position must be either before, middle, or after")
-        def run():
-            for line in self._contents.lines:
-                for result_word in line.words:
-                    if word in result_word.text:
-                        box = result_word.bounding_rect
-                        return (int(box.x + box.width / 2.0 + self._offset[0]),
-                                int(box.y + box.height / 2.0 + self._offset[1]))
-        return self._executor.submit(run).result()
