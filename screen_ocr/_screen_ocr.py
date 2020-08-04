@@ -171,6 +171,8 @@ class ScreenContents(object):
         """
         if cursor_position not in ("before", "middle", "after"):
             raise ValueError("cursor_position must be either before, middle, or after")
+        if not target_word:
+            raise ValueError("target_word is empty")
         target_word = target_word.lower()
         # First, find all matches tied for highest score.
         scored_words = [(self._score_word(candidate.text, target_word), candidate)
