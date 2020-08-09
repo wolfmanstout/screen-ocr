@@ -1,3 +1,4 @@
+# import gc
 import asyncio
 import threading
 from concurrent import futures
@@ -22,9 +23,15 @@ class WinRtBackend(_base.OcrBackend):
         async def run_ocr_async(image):
             bytes = image.convert("RGBA").tobytes()
             data_writer = streams.DataWriter()
-            data_writer.write_bytes(list(bytes))
+            bytes_list = list(bytes)
+            del bytes
+            # Needed when testing on large files on 32-bit.
+            # gc.collect()
+            data_writer.write_bytes(bytes_list)
+            del bytes_list
             bitmap = imaging.SoftwareBitmap(imaging.BitmapPixelFormat.RGBA8, image.width, image.height)
             bitmap.copy_from_buffer(data_writer.detach_buffer())
+            del data_writer
             result = await engine.recognize_async(bitmap)
             lines = [_base.OcrLine([_base.OcrWord(word.text,
                                                   word.bounding_rect.x,

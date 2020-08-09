@@ -81,7 +81,7 @@ class Reader(object):
             return cls(backend, **kwargs)
         elif backend == "winrt":
             backend = _winrt.WinRtBackend()
-            return cls(backend, **kwargs)
+            return cls(backend, resize_factor=2, **kwargs)
         else:
             return cls(backend, **kwargs)
 

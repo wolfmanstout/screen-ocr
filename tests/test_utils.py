@@ -40,6 +40,8 @@ class OcrEstimator(BaseEstimator):
             threshold_function = lambda data: filters.threshold_niblack(data, self.block_size)
         elif self.threshold_type == "sauvola":
             threshold_function = lambda data: filters.threshold_sauvola(data, self.block_size)
+        elif self.threshold_type is None:
+            threshold_function = None
         else:
             raise ValueError("Unknown threshold type: {}".format(self.threshold_type))
         self.ocr_reader_ = screen_ocr.Reader.create_reader(

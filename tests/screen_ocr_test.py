@@ -116,15 +116,15 @@ elif args.mode == "grid_search":
     grid_search = model_selection.GridSearchCV(
         test_utils.OcrEstimator(),
         {
-            "backend": ["tesseract", "easyocr", "winrt"],
-            "threshold_type": ["local_otsu"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
-            "block_size": [41],
-            "correction_block_size": [31],
-            "margin": [50],
-            "resize_factor": [2],
-            "convert_grayscale": [True],
-            "shift_channels": [True],
-            "label_components": [False],
+            "backend": ["winrt"],  # ["tesseract", "easyocr", "winrt"],
+            # "threshold_type": ["local_otsu"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
+            # "block_size": [41],
+            # "correction_block_size": [31],
+            "margin": [0, 50],
+            "resize_factor": [1, 2, 3],
+            # "convert_grayscale": [True],
+            "shift_channels": [False, True],
+            # "label_components": [False],
         },
         # Evaluate each example separately so that standard deviation is automatically computed.
         cv=model_selection.LeaveOneOut()  # model_selection.PredefinedSplit([0] * len(y))
