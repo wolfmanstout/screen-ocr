@@ -73,7 +73,7 @@ if args.verbose:
 else:
     debug_image_callback = None
 ocr_reader = screen_ocr.Reader.create_reader(
-    "tesseract",
+    "winrt",
     debug_image_callback=debug_image_callback)
 
 
@@ -120,8 +120,9 @@ elif args.mode == "grid_search":
             # "threshold_type": ["local_otsu"], # , "local_otsu", "local"],  # , "niblack", "sauvola"],
             # "block_size": [41],
             # "correction_block_size": [31],
-            "margin": [0, 50],
-            "resize_factor": [1, 2, 3],
+            # "margin": [0, 50],
+            "resize_factor": [2, 3],
+            "resize_method": [Image.NEAREST, Image.BOX, Image.BILINEAR, Image.HAMMING, Image.BICUBIC, Image.LANCZOS],
             # "convert_grayscale": [True],
             "shift_channels": [False, True],
             # "label_components": [False],

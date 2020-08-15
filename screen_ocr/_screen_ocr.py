@@ -81,7 +81,10 @@ class Reader(object):
             return cls(backend, **kwargs)
         elif backend == "winrt":
             backend = _winrt.WinRtBackend()
-            return cls(backend, resize_factor=2, **kwargs)
+            return cls(backend,
+                       **dict({"resize_factor": 3,
+                               "shift_channels": True},
+                              **kwargs))
         else:
             return cls(backend, **kwargs)
 
@@ -89,8 +92,9 @@ class Reader(object):
                  backend,
                  threshold_function=None,
                  correction_block_size=None,
-                 margin=0,
-                 resize_factor=1,
+                 margin=None,
+                 resize_factor=None,
+                 resize_method=None,
                  convert_grayscale=False,
                  shift_channels=False,
                  label_components=False,
@@ -100,8 +104,9 @@ class Reader(object):
         self._backend = backend
         self.threshold_function = threshold_function
         self.correction_block_size = correction_block_size
-        self.margin = margin
-        self.resize_factor = resize_factor
+        self.margin = margin or 0
+        self.resize_factor = resize_factor or 1
+        self.resize_method = resize_method or Image.LANCZOS
         self.convert_grayscale = convert_grayscale
         self.shift_channels = shift_channels
         self.label_components = label_components
@@ -154,7 +159,7 @@ class Reader(object):
     def _preprocess(self, image):
         if self.resize_factor != 1:
             new_size = (image.size[0] * self.resize_factor, image.size[1] * self.resize_factor)
-            image = image.resize(new_size, Image.NEAREST)
+            image = image.resize(new_size, self.resize_method)
         if self.debug_image_callback:
             self.debug_image_callback("debug_resized", image)
 

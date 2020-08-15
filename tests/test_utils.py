@@ -16,6 +16,7 @@ class OcrEstimator(BaseEstimator):
                  correction_block_size=None,
                  margin=None,
                  resize_factor=None,
+                 resize_method=None,
                  convert_grayscale=None,
                  shift_channels=None,
                  label_components=None):
@@ -25,6 +26,7 @@ class OcrEstimator(BaseEstimator):
         self.correction_block_size = correction_block_size
         self.margin = margin
         self.resize_factor = resize_factor
+        self.resize_method = resize_method
         self.convert_grayscale = convert_grayscale
         self.shift_channels = shift_channels
         self.label_components = label_components
@@ -50,6 +52,7 @@ class OcrEstimator(BaseEstimator):
             correction_block_size=self.correction_block_size,
             margin=self.margin,
             resize_factor=self.resize_factor,
+            resize_method=self.resize_method,
             convert_grayscale=self.convert_grayscale,
             shift_channels=self.shift_channels,
             label_components=self.label_components,
