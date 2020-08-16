@@ -82,8 +82,7 @@ class Reader(object):
         elif backend == "winrt":
             backend = _winrt.WinRtBackend()
             return cls(backend,
-                       **dict({"resize_factor": 3,
-                               "shift_channels": True},
+                       **dict({"resize_factor": 2},
                               **kwargs))
         else:
             return cls(backend, **kwargs)
@@ -319,7 +318,11 @@ class ScreenContents(object):
             x = best_match.center[0]
         elif cursor_position == "after":
             x = best_match.left + best_match.width
-        return (int(x), int(best_match.center[1]))
+        # Adjust position slightly to the right. For some reason Windows biases
+        # towards the left side of whatever is clicked (not confirmed on other
+        # operating systems).
+        right_shift = 1
+        return (int(x + right_shift), int(best_match.center[1]))
 
     def _score_word(self, candidate, normalized_target):
         candidate = candidate.lower().replace(u'\u2019', '\'')
