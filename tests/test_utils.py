@@ -1,5 +1,5 @@
 import screen_ocr
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 from skimage import filters, morphology
 from sklearn.base import BaseEstimator
 
