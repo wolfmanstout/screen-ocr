@@ -14,11 +14,11 @@ setuptools.setup(
     url="https://github.com/wolfmanstout/screen-ocr",
     packages=["screen_ocr"],
     install_requires=[
-        "fuzzywuzzy[speedup]",
         "numpy",
         "pandas",
         "pillow",
         "pytesseract",
+        "rapidfuzz",
         "scikit-image",
     ],
     classifiers=[

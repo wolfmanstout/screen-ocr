@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw, ImageGrab, ImageOps
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 from skimage import filters, morphology, transform
 
 from . import _base
@@ -328,10 +328,10 @@ class ScreenContents(object):
         candidate = candidate.lower().replace(u'\u2019', '\'')
         if float(len(candidate)) / len(normalized_target) < self.confidence_threshold:
             return None
-        ratio = fuzz.partial_ratio(normalized_target, candidate) / 100.0
-        if ratio < self.confidence_threshold:
-            return None
-        return ratio
+        ratio = fuzz.partial_ratio(
+            normalized_target, candidate,
+            score_cutoff=self.confidence_threshold*100)
+        return ratio / 100.0 or None
 
     @staticmethod
     def distance_squared(x1, y1, x2, y2):
