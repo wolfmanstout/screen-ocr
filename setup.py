@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="screen-ocr",
-    version="0.0.1",
+    version="0.1.0",
     author="James Stout",
     author_email="james.wolf.stout@gmail.com",
     description="Library for processing screen contents using OCR",
