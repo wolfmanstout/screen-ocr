@@ -7,6 +7,8 @@ The `screen-ocr` package makes it easy to perform OCR on portions of the screen.
 1. Install Tesseract binaries. For Windows, see
 https://github.com/UB-Mannheim/tesseract/wiki.
 2. `pip install screen-ocr`
+3. Optional: `pip install winrt` to use the native OCR engine on Windows, which
+   is very fast and high quality. Requires Python 3.7.
 
 ## Usage
 
