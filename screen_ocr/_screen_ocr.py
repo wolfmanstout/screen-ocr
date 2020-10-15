@@ -26,56 +26,53 @@ class Reader(object):
     """Reads on-screen text using OCR."""
 
     @classmethod
-    def create_quality_reader(cls,
-                              tesseract_data_path=None,
-                              tesseract_command=None,
-                              **kwargs):
+    def create_quality_reader(cls, **kwargs):
         """Create reader optimized for quality.
 
         See constructor for full argument list.
         """
-        backend = _tesseract.TesseractBackend(
-            tesseract_data_path=tesseract_data_path,
-            tesseract_command=tesseract_command)
-        return cls(backend,
-                   threshold_function=lambda data: filters.rank.otsu(data, morphology.square(41)),
-                   correction_block_size=31,
-                   margin=50,
-                   resize_factor=2,
-                   convert_grayscale=True,
-                   shift_channels=True,
-                   label_components=False,
-                   **kwargs)
+        if _winrt:
+            return cls.create_reader(backend="winrt", **kwargs)
+        else:
+            return cls.create_reader(backend="tesseract", **kwargs)
 
     @classmethod
-    def create_fast_reader(cls,
-                           tesseract_data_path=None,
-                           tesseract_command=None,
-                           **kwargs):
+    def create_fast_reader(cls, **kwargs):
         """Create reader optimized for speed.
 
         See constructor for full argument list.
         """
-        backend = _tesseract.TesseractBackend(
-            tesseract_data_path=tesseract_data_path,
-            tesseract_command=tesseract_command)
-        return cls(backend,
-                   threshold_function=lambda data: filters.threshold_otsu(data),
-                   correction_block_size=41,
-                   margin=60,
-                   resize_factor=2,
-                   convert_grayscale=True,
-                   shift_channels=True,
-                   label_components=False,
-                   **kwargs)
+        if _winrt:
+            return cls.create_reader(backend="winrt", **kwargs)
+        else:
+            defaults = {
+               "threshold_function": lambda data: filters.threshold_otsu(data),
+               "correction_block_size": 41,
+               "margin": 60,
+            }
+            return cls.create_reader(backend="tesseract", **dict(defaults, **kwargs))
 
     @classmethod
     def create_reader(cls,
                       backend,
+                      tesseract_data_path=None,
+                      tesseract_command=None,
                       **kwargs):
         """Create reader with specified backend."""
         if backend == "tesseract":
-            return cls.create_quality_reader(**kwargs)
+            backend = _tesseract.TesseractBackend(
+                tesseract_data_path=tesseract_data_path,
+                tesseract_command=tesseract_command)
+            defaults = {
+                "threshold_function": lambda data: filters.rank.otsu(data, morphology.square(41)),
+                "correction_block_size": 31,
+                "margin": 50,
+                "resize_factor": 2,
+                "convert_grayscale": True,
+                "shift_channels": True,
+                "label_components": False,
+            }
+            return cls(backend, **dict(defaults, **kwargs))
         elif backend == "easyocr":
             backend = _easyocr.EasyOcrBackend()
             return cls(backend, **kwargs)
