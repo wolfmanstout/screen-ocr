@@ -9,7 +9,7 @@ from . import _base
 class WinRtBackend(_base.OcrBackend):
     def __init__(self):
         self._executor = futures.ThreadPoolExecutor(max_workers=1)
-        self._executor.submit(self._init_winrt)
+        self._executor.submit(self._init_winrt).result()
 
     def run_ocr(self, image):
         return self._executor.submit(lambda: self._run_ocr_sync(image)).result()

@@ -7,18 +7,19 @@ from rapidfuzz import fuzz
 from skimage import filters, morphology, transform
 
 from . import _base
-from . import _tesseract
 
 # Optional packages.
 try:
+    from . import _tesseract
+except (ImportError, SyntaxError):
+    _tesseract = None
+try:
     from . import _easyocr
 except ImportError:
-    print("EasyOCR not supported.")
     _easyocr = None
 try:
     from . import _winrt
 except (ImportError, SyntaxError):
-    print("WinRT not supported.")
     _winrt = None
 
 
@@ -60,6 +61,8 @@ class Reader(object):
                       **kwargs):
         """Create reader with specified backend."""
         if backend == "tesseract":
+            if not _tesseract:
+                raise ValueError("Tesseract backend unavailable. To install, run pip install screen-ocr[tesseract].")
             backend = _tesseract.TesseractBackend(
                 tesseract_data_path=tesseract_data_path,
                 tesseract_command=tesseract_command)
@@ -74,10 +77,17 @@ class Reader(object):
             }
             return cls(backend, **dict(defaults, **kwargs))
         elif backend == "easyocr":
+            if not _easyocr:
+                raise ValueError("EasyOCR backend unavailable. To install, run pip install screen-ocr[easyocr].")
             backend = _easyocr.EasyOcrBackend()
             return cls(backend, **kwargs)
         elif backend == "winrt":
-            backend = _winrt.WinRtBackend()
+            if not _winrt:
+                raise ValueError("WinRT backend unavailable. To install, run pip install screen-ocr[winrt].")
+            try:
+                backend = _winrt.WinRtBackend()
+            except ImportError:
+                raise ValueError("WinRT backend unavailable. To install, run pip install screen-ocr[winrt].")
             return cls(backend,
                        **dict({"resize_factor": 2},
                               **kwargs))

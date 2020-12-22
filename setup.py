@@ -17,10 +17,16 @@ setuptools.setup(
         "numpy",
         "pandas",
         "pillow",
-        "pytesseract",
         "rapidfuzz",
         "scikit-image",
     ],
+    # See README.md for backend recommendations.
+    extras_require={
+        "tesseract": ["pytesseract"],
+        # See https://github.com/microsoft/xlang/issues/717
+        "winrt": ["winrt==1.0.20239.1"],
+        "easyocr": ["easyocr"],
+    },
     classifiers=[
         "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 3",
