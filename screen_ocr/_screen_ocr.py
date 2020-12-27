@@ -299,6 +299,19 @@ class ScreenContents(object):
         """
         if cursor_position not in ("before", "middle", "after"):
             raise ValueError("cursor_position must be either before, middle, or after")
+        word_location = self.find_nearest_word(target_word)
+        if cursor_position == "before":
+            return word_location.start_coordinates
+        elif cursor_position == "middle":
+            return word_location.middle_coordinates
+        elif cursor_position == "after":
+            return word_location.end_coordinates
+
+    def find_nearest_word(self, target_word):
+        """Return the location of the nearest instance of the provided word.
+
+        Uses fuzzy matching.
+        """
         if not target_word:
             raise ValueError("target_word is empty")
         target_word = target_word.lower()
@@ -319,17 +332,17 @@ class ScreenContents(object):
                                                     *self.screen_coordinates), word)
                              for word in possible_matches]
         best_match = min(distance_to_words, key=lambda x: x[0])[1]
-        if cursor_position == "before":
-            x = best_match.left
-        elif cursor_position == "middle":
-            x = best_match.center[0]
-        elif cursor_position == "after":
-            x = best_match.left + best_match.width
         # Adjust position slightly to the right. For some reason Windows biases
         # towards the left side of whatever is clicked (not confirmed on other
         # operating systems).
         right_shift = 1
-        return (int(x + right_shift), int(best_match.center[1]))
+        return WordLocation(left=int(best_match.left + right_shift),
+                            top=int(best_match.top),
+                            width=int(best_match.width),
+                            height=int(best_match.height),
+                            left_char_offset=0,
+                            right_char_offset=0,
+                            text=best_match.text)
 
     def _score_word(self, candidate, normalized_target):
         candidate = candidate.lower().replace(u'\u2019', '\'')
@@ -345,3 +358,51 @@ class ScreenContents(object):
         x_dist = (x1 - x2)
         y_dist = (y1 - y2)
         return x_dist * x_dist + y_dist * y_dist
+
+
+class WordLocation(object):
+    """Location of a word on-screen."""
+
+    def __init__(self,
+                 left,
+                 top,
+                 width,
+                 height,
+                 left_char_offset,
+                 right_char_offset,
+                 text):
+        self.left = left
+        self.top = top
+        self.width = width
+        self.height = height
+        self.left_char_offset = left_char_offset
+        self.right_char_offset = right_char_offset
+        self.text = text
+
+    @property
+    def right(self):
+        return self.left + self.width
+
+    @property
+    def bottom(self):
+        return self.top + self.height
+
+    @property
+    def middle_x(self):
+        return int(self.left + self.width / 2)
+
+    @property
+    def middle_y(self):
+        return int(self.top + self.height / 2)
+
+    @property
+    def start_coordinates(self):
+        return (self.left, self.middle_y)
+
+    @property
+    def middle_coordinates(self):
+        return (self.middle_x, self.middle_y)
+
+    @property
+    def end_coordinates(self):
+        return (self.right, self.middle_y)
