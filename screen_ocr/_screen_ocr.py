@@ -332,6 +332,16 @@ class ScreenContents(object):
                                                     *self.screen_coordinates), word)
                              for word in possible_matches]
         best_match = min(distance_to_words, key=lambda x: x[0])[1]
+        # Include char offsets if exact match.
+        left_char_offset = best_match.text.find(target_word)
+        if left_char_offset != -1:
+            right_char_offset = len(best_match.text) - (left_char_offset + len(target_word))
+            match_text = target_word
+        else:
+            left_char_offset = 0
+            right_char_offset = 0
+            match_text = best_match.text
+
         # Adjust position slightly to the right. For some reason Windows biases
         # towards the left side of whatever is clicked (not confirmed on other
         # operating systems).
@@ -340,9 +350,9 @@ class ScreenContents(object):
                             top=int(best_match.top),
                             width=int(best_match.width),
                             height=int(best_match.height),
-                            left_char_offset=0,
-                            right_char_offset=0,
-                            text=best_match.text)
+                            left_char_offset=left_char_offset,
+                            right_char_offset=right_char_offset,
+                            text=match_text)
 
     def _score_word(self, candidate, normalized_target):
         candidate = candidate.lower().replace(u'\u2019', '\'')
