@@ -314,7 +314,7 @@ class ScreenContents(object):
         """
         if not target_word:
             raise ValueError("target_word is empty")
-        target_word = target_word.lower()
+        target_word = self._normalize(target_word)
         # First, find all matches tied for highest score.
         scored_words = [(self._score_word(candidate.text, target_word), candidate)
                         for line in self.result.lines
@@ -333,10 +333,10 @@ class ScreenContents(object):
                              for word in possible_matches]
         best_match = min(distance_to_words, key=lambda x: x[0])[1]
         # Include char offsets if exact match.
-        left_char_offset = best_match.text.find(target_word)
+        left_char_offset = self._normalize(best_match.text).find(target_word)
         if left_char_offset != -1:
             right_char_offset = len(best_match.text) - (left_char_offset + len(target_word))
-            match_text = target_word
+            match_text = best_match.text[left_char_offset:(left_char_offset + len(target_word))]
         else:
             left_char_offset = 0
             right_char_offset = 0
@@ -354,8 +354,13 @@ class ScreenContents(object):
                             right_char_offset=right_char_offset,
                             text=match_text)
 
+    @staticmethod
+    def _normalize(word):
+        # Avoid any changes that affect word length.
+        return word.lower().replace(u'\u2019', '\'')
+
     def _score_word(self, candidate, normalized_target):
-        candidate = candidate.lower().replace(u'\u2019', '\'')
+        candidate = self._normalize(candidate)
         if float(len(candidate)) / len(normalized_target) < self.confidence_threshold:
             return None
         ratio = fuzz.partial_ratio(
