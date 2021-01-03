@@ -300,6 +300,8 @@ class ScreenContents(object):
         if cursor_position not in ("before", "middle", "after"):
             raise ValueError("cursor_position must be either before, middle, or after")
         word_location = self.find_nearest_word(target_word)
+        if not word_location:
+            return None
         if cursor_position == "before":
             return word_location.start_coordinates
         elif cursor_position == "middle":
