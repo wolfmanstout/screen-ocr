@@ -265,8 +265,20 @@ class Reader(object):
         return data
 
 
+def _generate_homonyms(homonym_list):
+    homonym_map = {}
+    for homonym_set in homonym_list:
+        for homonym in homonym_set:
+            homonym_map[homonym] = homonym_set
+    return homonym_map
+
+
 class ScreenContents(object):
     """OCR'd contents of a portion of the screen."""
+
+    _homonyms = _generate_homonyms(
+        # 0k is not actually a homonym but is frequently produced by OCR.
+        [("ok", "okay", "0k")])
 
     def __init__(self,
                  screen_coordinates,
@@ -318,10 +330,10 @@ class ScreenContents(object):
             raise ValueError("target_word is empty")
         target_word = self._normalize(target_word)
         # First, find all matches tied for highest score.
-        scored_words = [(self._score_word(candidate.text, target_word), candidate)
+        scored_words = [self._score_word(candidate, target_word)
                         for line in self.result.lines
                         for candidate in line.words]
-        scored_words = [word for word in scored_words if word[0] is not None]
+        scored_words = [word for word in scored_words if word is not None]
         if not scored_words:
             return None
         possible_matches = [word
@@ -329,32 +341,18 @@ class ScreenContents(object):
                             if score == max([score for score, _ in scored_words])]
 
         # Next, find the closest match based on screen distance.
-        distance_to_words = [(self.distance_squared(word.center[0],
-                                                    word.center[1],
+        distance_to_words = [(self.distance_squared(word.middle_x,
+                                                    word.middle_y,
                                                     *self.screen_coordinates), word)
                              for word in possible_matches]
         best_match = min(distance_to_words, key=lambda x: x[0])[1]
-        # Include char offsets if exact match.
-        left_char_offset = self._normalize(best_match.text).find(target_word)
-        if left_char_offset != -1:
-            right_char_offset = len(best_match.text) - (left_char_offset + len(target_word))
-            match_text = best_match.text[left_char_offset:(left_char_offset + len(target_word))]
-        else:
-            left_char_offset = 0
-            right_char_offset = 0
-            match_text = best_match.text
 
         # Adjust position slightly to the right. For some reason Windows biases
         # towards the left side of whatever is clicked (not confirmed on other
         # operating systems).
         right_shift = 1
-        return WordLocation(left=int(best_match.left + right_shift),
-                            top=int(best_match.top),
-                            width=int(best_match.width),
-                            height=int(best_match.height),
-                            left_char_offset=left_char_offset,
-                            right_char_offset=right_char_offset,
-                            text=match_text)
+        best_match.left += right_shift
+        return best_match
 
     @staticmethod
     def _normalize(word):
@@ -362,13 +360,33 @@ class ScreenContents(object):
         return word.lower().replace(u'\u2019', '\'')
 
     def _score_word(self, candidate, normalized_target):
-        candidate = self._normalize(candidate)
-        if float(len(candidate)) / len(normalized_target) < self.confidence_threshold:
-            return None
-        ratio = fuzz.partial_ratio(
-            normalized_target, candidate,
-            score_cutoff=self.confidence_threshold*100)
-        return ratio / 100.0 or None
+        candidate_text = self._normalize(candidate.text)
+        homonyms = self._homonyms.get(normalized_target, (normalized_target,))
+        for homonym in homonyms:
+            if float(len(candidate_text)) / len(homonym) < self.confidence_threshold:
+                continue
+            ratio = fuzz.partial_ratio(
+                homonym, candidate_text,
+                score_cutoff=self.confidence_threshold*100)
+            if ratio:
+                # Include char offsets if exact match.
+                left_char_offset = candidate_text.find(homonym)
+                if left_char_offset != -1:
+                    right_char_offset = len(candidate.text) - (left_char_offset + len(homonym))
+                    match_text = candidate.text[left_char_offset:(left_char_offset + len(homonym))]
+                else:
+                    left_char_offset = 0
+                    right_char_offset = 0
+                    match_text = candidate.text
+                location = WordLocation(left=int(candidate.left),
+                                        top=int(candidate.top),
+                                        width=int(candidate.width),
+                                        height=int(candidate.height),
+                                        left_char_offset=left_char_offset,
+                                        right_char_offset=right_char_offset,
+                                        text=match_text)
+                return (ratio / 100.0, location)
+        return None
 
     @staticmethod
     def distance_squared(x1, y1, x2, y2):

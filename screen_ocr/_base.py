@@ -25,4 +25,3 @@ class OcrWord:
         self.top = top
         self.width = width
         self.height = height
-        self.center = (left + width / 2.0, top + height / 2.0)
