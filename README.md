@@ -24,10 +24,10 @@ EasyOCR is a very accurate but slow backend and only runs on Python 64-bit, and 
 
 ## Usage
 
-You can do a simple test by running `python -m screen_ocr` to OCR the current screen contents. See [__main__.py](https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__main__.py) for the code.
+You can do a simple test by running `python -m screen_ocr` to OCR the current screen contents. See [`__main__.py``](https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__main__.py) for the code.
 
 If using Tesseract with a custom installation directory on Windows, set
 `tesseract_data_path` and `tesseract_command` paths appropriately when
 constructing a `Reader` instance.
 
-See also [gaze-ocr](https://github.com/wolfmanstout/gaze-ocr/blob/master/gaze_ocr/_gaze_ocr.py) for more a more involved usage exmaple (note: there are no direct dependencies on this package because ocr_reader is an injected instance of `screen_ocr.Reader`).
+See also [gaze-ocr](https://github.com/wolfmanstout/gaze-ocr/blob/master/gaze_ocr/_gaze_ocr.py) for more a more involved usage example (note: there is no `import screen_ocr` because ocr_reader is an injected instance of `screen_ocr.Reader`).
