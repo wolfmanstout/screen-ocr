@@ -23,8 +23,7 @@ setuptools.setup(
     # See README.md for backend recommendations.
     extras_require={
         "tesseract": ["pytesseract"],
-        # See https://github.com/microsoft/xlang/issues/717
-        "winrt": ["winrt==1.0.20239.1"],
+        "winrt": ["winrt"],
         "easyocr": ["easyocr"],
     },
     classifiers=[
