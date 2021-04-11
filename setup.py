@@ -15,14 +15,13 @@ setuptools.setup(
     packages=["screen_ocr"],
     install_requires=[
         "numpy",
-        "pandas",
         "pillow",
         "rapidfuzz",
         "scikit-image",
     ],
     # See README.md for backend recommendations.
     extras_require={
-        "tesseract": ["pytesseract"],
+        "tesseract": ["pytesseract", "pandas"],
         "winrt": ["winrt"],
         "easyocr": ["easyocr"],
     },

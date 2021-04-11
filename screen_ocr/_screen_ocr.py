@@ -1,7 +1,6 @@
 """Library for processing screen contents using OCR."""
 
 import numpy as np
-import pandas as pd
 from PIL import Image, ImageDraw, ImageGrab, ImageOps
 from rapidfuzz import fuzz
 from skimage import filters, morphology, transform
