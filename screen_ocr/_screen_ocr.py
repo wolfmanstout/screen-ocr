@@ -119,9 +119,9 @@ class Reader(object):
         self.confidence_threshold = confidence_threshold or 0.75
         self.radius = radius or 100
 
-    def read_nearby(self, screen_coordinates):
+    def read_nearby(self, screen_coordinates, monitor):
         """Return ScreenContents nearby the provided coordinates."""
-        screenshot, bounding_box = self._screenshot_nearby(screen_coordinates)
+        screenshot, bounding_box = self._screenshot_nearby(screen_coordinates, monitor)
         return self.read_image(screenshot,
                                offset=bounding_box[0:2],
                                screen_coordinates=screen_coordinates)
@@ -137,10 +137,15 @@ class Reader(object):
                               confidence_threshold=self.confidence_threshold)
 
 
-    def _screenshot_nearby(self, screen_coordinates):
+    def _screenshot_nearby(self, screen_coordinates, monitor):
         # TODO Consider cropping within grab() for performance. Requires knowledge
         # of screen bounds.
-        screenshot = ImageGrab.grab()
+        from mss import mss
+        with mss() as sct:
+            monitor = sct.monitors[monitor]
+            sct_img = sct.grab(monitor)
+            # Convert to PIL/Pillow Image
+            screenshot = Image.frombytes('RGB', sct_img.size, sct_img.bgra, 'raw', 'BGRX')
         bounding_box = (max(0, screen_coordinates[0] - self.radius),
                         max(0, screen_coordinates[1] - self.radius),
                         min(screenshot.width, screen_coordinates[0] + self.radius),
