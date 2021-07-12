@@ -1,6 +1,7 @@
 """Library for processing screen contents using OCR."""
 
 import numpy as np
+from mss import mss
 from PIL import Image, ImageDraw, ImageGrab, ImageOps
 from rapidfuzz import fuzz
 from skimage import filters, morphology, transform
@@ -140,7 +141,6 @@ class Reader(object):
     def _screenshot_nearby(self, screen_coordinates, monitor):
         # TODO Consider cropping within grab() for performance. Requires knowledge
         # of screen bounds.
-        from mss import mss
         with mss() as sct:
             monitor = sct.monitors[monitor]
             sct_img = sct.grab(monitor)
