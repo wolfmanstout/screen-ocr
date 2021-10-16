@@ -3,23 +3,18 @@ import asyncio
 import threading
 from concurrent import futures
 
+import winrt
+import winrt.windows.graphics.imaging as imaging
+import winrt.windows.media.ocr as ocr
+import winrt.windows.storage.streams as streams
+
 from . import _base
 
 
 class WinRtBackend(_base.OcrBackend):
     def __init__(self):
-        self._executor = futures.ThreadPoolExecutor(max_workers=1)
-        self._executor.submit(self._init_winrt).result()
-
-    def run_ocr(self, image):
-        return self._executor.submit(lambda: self._run_ocr_sync(image)).result()
-
-    def _init_winrt(self):
-        import winrt
-        import winrt.windows.graphics.imaging as imaging
-        import winrt.windows.media.ocr as ocr
-        import winrt.windows.storage.streams as streams
         engine = ocr.OcrEngine.try_create_from_user_profile_languages()
+        # Define this in the constructor to avoid SyntaxError in Python 2.7.
         async def run_ocr_async(image):
             bytes = image.convert("RGBA").tobytes()
             data_writer = streams.DataWriter()
@@ -43,5 +38,12 @@ class WinRtBackend(_base.OcrBackend):
             return _base.OcrResult(lines)
         self._run_ocr_async = run_ocr_async
 
-    def _run_ocr_sync(self, image):
-        return asyncio.run(self._run_ocr_async(image))
+    def run_ocr(self, image):
+        result = None
+        def run():
+            nonlocal result
+            result = asyncio.run(self._run_ocr_async(image))
+        thread = threading.Thread(target=run)
+        thread.start()
+        thread.join()
+        return result        
