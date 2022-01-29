@@ -275,9 +275,11 @@ def _generate_homonyms(homonym_list):
 class ScreenContents(object):
     """OCR'd contents of a portion of the screen."""
 
-    _homonyms = _generate_homonyms(
+    _homonyms = _generate_homonyms([
         # 0k is not actually a homonym but is frequently produced by OCR.
-        [("ok", "okay", "0k")])
+        ("ok", "okay", "0k"),
+        ("close", "clothes"),
+    ])
 
     def __init__(self,
                  screen_coordinates,
