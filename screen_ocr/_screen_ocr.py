@@ -290,12 +290,13 @@ class ScreenContents(object):
         ("8", "eight"),
         ("9", "nine"),
         (".", "period"),
-        ("?", "question mark"),
-        ("!", "exclamation mark"),
+        # TODO Fix this hacky approach to handling two-word homonyms.
+        ("?", "questionmark"),
+        ("!", "exclamationmark"),
         (",", "comma"),
         (":", "colon"),
-        ("(", "open paren"),
-        (")", "close paren"),
+        ("(", "openparen"),
+        (")", "closeparen"),
         ("-", "hyphen"),
     ])
 
@@ -381,6 +382,8 @@ class ScreenContents(object):
     def _score_word(self, candidate, normalized_target):
         candidate_text = self._normalize(candidate.text)
         homonyms = self._homonyms.get(normalized_target, (normalized_target,))
+        best_ratio = 0.0
+        best_location = None
         for homonym in homonyms:
             if float(len(candidate_text)) / len(homonym) < self.confidence_threshold:
                 continue
@@ -404,8 +407,10 @@ class ScreenContents(object):
                                         left_char_offset=left_char_offset,
                                         right_char_offset=right_char_offset,
                                         text=match_text)
-                return (ratio / 100.0, location)
-        return None
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    best_location = location
+        return (best_ratio / 100.0, best_location) if best_ratio else None
 
     @staticmethod
     def distance_squared(x1, y1, x2, y2):
