@@ -264,19 +264,19 @@ class Reader(object):
         return data
 
 
-def _generate_homonyms(homonym_list):
-    homonym_map = {}
-    for homonym_set in homonym_list:
-        for homonym in homonym_set:
-            homonym_map[homonym] = homonym_set
-    return homonym_map
+def _generate_homophones(homophone_list):
+    homophone_map = {}
+    for homophone_set in homophone_list:
+        for homophone in homophone_set:
+            homophone_map[homophone] = homophone_set
+    return homophone_map
 
 
 class ScreenContents(object):
     """OCR'd contents of a portion of the screen."""
 
-    _homonyms = _generate_homonyms([
-        # 0k is not actually a homonym but is frequently produced by OCR.
+    _homophones = _generate_homophones([
+        # 0k is not actually a homophone but is frequently produced by OCR.
         ("ok", "okay", "0k"),
         ("close", "clothes"),
         ("0", "zero"),
@@ -290,7 +290,7 @@ class ScreenContents(object):
         ("8", "eight"),
         ("9", "nine"),
         (".", "period"),
-        # TODO Fix this hacky approach to handling two-word homonyms.
+        # TODO Fix this hacky approach to handling two-word homophones.
         ("?", "questionmark"),
         ("!", "exclamationmark"),
         (",", "comma"),
@@ -381,21 +381,21 @@ class ScreenContents(object):
 
     def _score_word(self, candidate, normalized_target):
         candidate_text = self._normalize(candidate.text)
-        homonyms = self._homonyms.get(normalized_target, (normalized_target,))
+        homophones = self._homophones.get(normalized_target, (normalized_target,))
         best_ratio = 0.0
         best_location = None
-        for homonym in homonyms:
-            if float(len(candidate_text)) / len(homonym) < self.confidence_threshold:
+        for homophone in homophones:
+            if float(len(candidate_text)) / len(homophone) < self.confidence_threshold:
                 continue
             ratio = fuzz.partial_ratio(
-                homonym, candidate_text,
+                homophone, candidate_text,
                 score_cutoff=self.confidence_threshold*100)
             if ratio:
                 # Include char offsets if exact match.
-                left_char_offset = candidate_text.find(homonym)
+                left_char_offset = candidate_text.find(homophone)
                 if left_char_offset != -1:
-                    right_char_offset = len(candidate.text) - (left_char_offset + len(homonym))
-                    match_text = candidate.text[left_char_offset:(left_char_offset + len(homonym))]
+                    right_char_offset = len(candidate.text) - (left_char_offset + len(homophone))
+                    match_text = candidate.text[left_char_offset:(left_char_offset + len(homophone))]
                 else:
                     left_char_offset = 0
                     right_char_offset = 0
