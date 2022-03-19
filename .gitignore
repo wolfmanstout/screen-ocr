@@ -139,3 +139,6 @@ cython_debug/
 
 # Debugging notebooks
 *.ipynb
+
+# VSCode settings
+.vscode/settings.json
