@@ -1,5 +1,10 @@
 """Library for processing screen contents using OCR."""
 
+from collections import deque
+from dataclasses import dataclass
+from itertools import islice
+import re
+from typing import Iterable, Iterator, Optional, Sequence
 import numpy as np
 from PIL import Image, ImageDraw, ImageGrab, ImageOps
 from rapidfuzz import fuzz
@@ -263,6 +268,46 @@ class Reader(object):
                 data[:, 0] = data[:, 1]
         return data
 
+@dataclass
+class WordLocation:
+    """Location of a word on-screen."""
+
+    left: int
+    top: int
+    width: int
+    height: int
+    left_char_offset: int
+    right_char_offset: int
+    text: str
+
+    @property
+    def right(self):
+        return self.left + self.width
+
+    @property
+    def bottom(self):
+        return self.top + self.height
+
+    @property
+    def middle_x(self):
+        return int(self.left + self.width / 2)
+
+    @property
+    def middle_y(self):
+        return int(self.top + self.height / 2)
+
+    @property
+    def start_coordinates(self):
+        return (self.left, self.middle_y)
+
+    @property
+    def middle_coordinates(self):
+        return (self.middle_x, self.middle_y)
+
+    @property
+    def end_coordinates(self):
+        return (self.right, self.middle_y)
+
 
 def _generate_homophones(homophone_list):
     homophone_map = {}
@@ -346,122 +391,98 @@ class ScreenContents(object):
 
         Uses fuzzy matching.
         """
-        if not target_word:
-            raise ValueError("target_word is empty")
-        target_word = self._normalize(target_word)
+        result = self.find_nearest_words([target_word])
+        return result[0] if result else None
+
+    def find_nearest_words(self, target_words: Iterable[str]) -> Optional[Sequence[WordLocation]]:
+        """Return the location of the nearest sequence of the provided words.
+
+        Uses fuzzy matching.
+        """
+        if not target_words:
+            raise ValueError("target_words is empty")
+        target_words = list(map(self._normalize, target_words))
         # First, find all matches tied for highest score.
-        scored_words = [self._score_word(candidate, target_word)
-                        for line in self.result.lines
-                        for candidate in line.words]
-        scored_words = [word for word in scored_words if word is not None]
+        scored_words = [(self._score_words(candidates, target_words), candidates)
+                        for candidates in self._generate_candidates(self.result, len(target_words))]
+        scored_words = [words for words in scored_words if words[0]]
         if not scored_words:
             return None
-        possible_matches = [word
-                            for (score, word) in scored_words
-                            if score == max([score for score, _ in scored_words])]
+        possible_matches = [words
+                            for (score, words) in scored_words
+                            if score == max(score for score, _ in scored_words)]
 
         # Next, find the closest match based on screen distance.
-        distance_to_words = [(self.distance_squared(word.middle_x,
-                                                    word.middle_y,
-                                                    *self.screen_coordinates), word)
-                             for word in possible_matches]
-        best_match = min(distance_to_words, key=lambda x: x[0])[1]
+        distance_to_words = [(self._distance_squared((words[0].left + words[-1].right) / 2.0,
+                                                    (words[0].top + words[-1].bottom) / 2.0,
+                                                    *self.screen_coordinates),
+                              words)
+                             for words in possible_matches]
+        return min(distance_to_words, key=lambda x: x[0])[1]
 
-        # Adjust position slightly to the right. For some reason Windows biases
-        # towards the left side of whatever is clicked (not confirmed on other
-        # operating systems).
-        right_shift = 1
-        best_match.left += right_shift
-        return best_match
+    @staticmethod
+    def _generate_candidates(result: _base.OcrResult, length: int) -> Iterator[Sequence[WordLocation]]:
+        for line in result.lines:
+            for window in ScreenContents._sliding_window(ScreenContents._generate_candidates_from_line(line), length):
+                yield window
+
+    _SUBWORD_REGEX = re.compile(r"([A-Za-z][a-z]*|.)")
+
+    @staticmethod
+    def _generate_candidates_from_line(line: _base.OcrLine) -> Iterator[WordLocation]:
+        for word in line.words:
+            left_offset = 0
+            for match in re.finditer(ScreenContents._SUBWORD_REGEX, word.text):
+                subword = match.group(0)
+                right_offset = len(word.text) - (left_offset + len(subword))
+                # Adjust position slightly to the right. For some reason Windows biases
+                # towards the left side of whatever is clicked (not confirmed on other
+                # operating systems).
+                right_shift = 1
+                yield WordLocation(left=int(word.left) + right_shift,
+                                   top=int(word.top),
+                                   width=int(word.width),
+                                   height=int(word.height),
+                                   left_char_offset=left_offset,
+                                   right_char_offset=right_offset,
+                                   text=subword)
+                left_offset += len(subword)
 
     @staticmethod
     def _normalize(word):
         # Avoid any changes that affect word length.
         return word.lower().replace(u'\u2019', '\'')
 
-    def _score_word(self, candidate, normalized_target):
+    def _score_words(self,
+                     candidates: Iterable[WordLocation],
+                     normalized_targets: Iterable[str]) -> float:
+        scores = list(map(self._score_word, candidates, normalized_targets))
+        return sum(scores) if all(scores) else 0.0
+
+    def _score_word(self,
+                    candidate: WordLocation,
+                    normalized_target: str) -> float:
         candidate_text = self._normalize(candidate.text)
         homophones = self._homophones.get(normalized_target, (normalized_target,))
-        best_ratio = 0.0
-        best_location = None
-        for homophone in homophones:
-            if float(len(candidate_text)) / len(homophone) < self.confidence_threshold:
-                continue
-            ratio = fuzz.partial_ratio(
-                homophone, candidate_text,
-                score_cutoff=self.confidence_threshold*100)
-            if ratio:
-                # Include char offsets if exact match.
-                left_char_offset = candidate_text.find(homophone)
-                if left_char_offset != -1:
-                    right_char_offset = len(candidate.text) - (left_char_offset + len(homophone))
-                    match_text = candidate.text[left_char_offset:(left_char_offset + len(homophone))]
-                else:
-                    left_char_offset = 0
-                    right_char_offset = 0
-                    match_text = candidate.text
-                location = WordLocation(left=int(candidate.left),
-                                        top=int(candidate.top),
-                                        width=int(candidate.width),
-                                        height=int(candidate.height),
-                                        left_char_offset=left_char_offset,
-                                        right_char_offset=right_char_offset,
-                                        text=match_text)
-                if ratio > best_ratio:
-                    best_ratio = ratio
-                    best_location = location
-        return (best_ratio / 100.0, best_location) if best_ratio else None
+        best_ratio = max(fuzz.ratio(homophone, candidate_text,
+                                    score_cutoff=self.confidence_threshold*100)
+                         for homophone in homophones)
+        return best_ratio / 100.0
 
     @staticmethod
-    def distance_squared(x1, y1, x2, y2):
+    def _distance_squared(x1, y1, x2, y2):
         x_dist = (x1 - x2)
         y_dist = (y1 - y2)
         return x_dist * x_dist + y_dist * y_dist
 
-
-class WordLocation(object):
-    """Location of a word on-screen."""
-
-    def __init__(self,
-                 left,
-                 top,
-                 width,
-                 height,
-                 left_char_offset,
-                 right_char_offset,
-                 text):
-        self.left = left
-        self.top = top
-        self.width = width
-        self.height = height
-        self.left_char_offset = left_char_offset
-        self.right_char_offset = right_char_offset
-        self.text = text
-
-    @property
-    def right(self):
-        return self.left + self.width
-
-    @property
-    def bottom(self):
-        return self.top + self.height
-
-    @property
-    def middle_x(self):
-        return int(self.left + self.width / 2)
-
-    @property
-    def middle_y(self):
-        return int(self.top + self.height / 2)
-
-    @property
-    def start_coordinates(self):
-        return (self.left, self.middle_y)
-
-    @property
-    def middle_coordinates(self):
-        return (self.middle_x, self.middle_y)
-
-    @property
-    def end_coordinates(self):
-        return (self.right, self.middle_y)
+    @staticmethod
+    # From https://docs.python.org/3/library/itertools.html
+    def _sliding_window(iterable, n):
+        # sliding_window('ABCDEFG', 4) -> ABCD BCDE CDEF DEFG
+        it = iter(iterable)
+        window = deque(islice(it, n), maxlen=n)
+        if len(window) == n:
+            yield tuple(window)
+        for x in it:
+            window.append(x)
+            yield tuple(window)
