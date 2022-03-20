@@ -388,17 +388,22 @@ class ScreenContents(object):
 
         Uses fuzzy matching.
         """
-        result = self.find_nearest_words([target_word])
-        return result[0] if result else None
+        result = self.find_nearest_words(target_word)
+        return result[0] if (result and len(result) == 1) else None
 
-    def find_nearest_words(self, target_words: Iterable[str]) -> Optional[Sequence[WordLocation]]:
+    _SUBWORD_REGEX = re.compile(r"([A-Za-z][a-z]*|.)")
+
+    def find_nearest_words(self, target: str) -> Optional[Sequence[WordLocation]]:
         """Return the location of the nearest sequence of the provided words.
 
         Uses fuzzy matching.
         """
-        if not target_words:
-            raise ValueError("target_words is empty")
-        target_words = list(map(self._normalize, target_words))
+        if not target:
+            raise ValueError("target is empty")
+        target_words = list(map(self._normalize, 
+                                (subword 
+                                 for word in target.split() 
+                                 for subword in re.findall(self._SUBWORD_REGEX, word))))
         # First, find all matches tied for highest score.
         scored_words = [(self._score_words(candidates, target_words), candidates)
                         for candidates in self._generate_candidates(self.result, len(target_words))]
@@ -422,8 +427,6 @@ class ScreenContents(object):
         for line in result.lines:
             for window in ScreenContents._sliding_window(ScreenContents._generate_candidates_from_line(line), length):
                 yield window
-
-    _SUBWORD_REGEX = re.compile(r"([A-Za-z][a-z]*|.)")
 
     @staticmethod
     def _generate_candidates_from_line(line: _base.OcrLine) -> Iterator[WordLocation]:
