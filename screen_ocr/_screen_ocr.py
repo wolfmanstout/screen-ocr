@@ -110,7 +110,8 @@ class Reader(object):
                  label_components=False,
                  debug_image_callback=None,
                  confidence_threshold=None,
-                 radius=None):
+                 radius=None,
+                 homophones=None):
         self._backend = backend
         self.threshold_function = threshold_function
         self.correction_block_size = correction_block_size
@@ -123,6 +124,7 @@ class Reader(object):
         self.debug_image_callback = debug_image_callback
         self.confidence_threshold = confidence_threshold or 0.75
         self.radius = radius or 100
+        self.homophones = ScreenContents._normalize_homophones(homophones) or default_homophones()
 
     def read_nearby(self, screen_coordinates):
         """Return ScreenContents nearby the provided coordinates."""
@@ -139,7 +141,8 @@ class Reader(object):
         return ScreenContents(screen_coordinates=screen_coordinates,
                               screenshot=image,
                               result=result,
-                              confidence_threshold=self.confidence_threshold)
+                              confidence_threshold=self.confidence_threshold,
+                              homophones=self.homophones)
 
 
     def _screenshot_nearby(self, screen_coordinates):
@@ -268,6 +271,31 @@ class Reader(object):
                 data[:, 0] = data[:, 1]
         return data
 
+
+def default_homophones():
+    homophone_list = [
+        # 0k is not actually a homophone but is frequently produced by OCR.
+        ("ok", "okay", "0k"),
+        ("close", "clothes"),
+        ("0", "zero"),
+        ("1", "one"),
+        ("2", "two", "too", "to"),
+        ("3", "three"),
+        ("4", "four", "for"),
+        ("5", "five"),
+        ("6", "six"),
+        ("7", "seven"),
+        ("8", "eight"),
+        ("9", "nine"),
+        (".", "period"),
+    ]
+    homophone_map = {}
+    for homophone_set in homophone_list:
+        for homophone in homophone_set:
+            homophone_map[homophone] = homophone_set
+    return homophone_map
+
+
 @dataclass
 class WordLocation:
     """Location of a word on-screen."""
@@ -309,51 +337,20 @@ class WordLocation:
         return (self.right, self.middle_y)
 
 
-def _generate_homophones(homophone_list):
-    homophone_map = {}
-    for homophone_set in homophone_list:
-        for homophone in homophone_set:
-            homophone_map[homophone] = homophone_set
-    return homophone_map
-
-
 class ScreenContents(object):
     """OCR'd contents of a portion of the screen."""
-
-    _homophones = _generate_homophones([
-        # 0k is not actually a homophone but is frequently produced by OCR.
-        ("ok", "okay", "0k"),
-        ("close", "clothes"),
-        ("0", "zero"),
-        ("1", "one"),
-        ("2", "two", "too", "to"),
-        ("3", "three"),
-        ("4", "four", "for"),
-        ("5", "five"),
-        ("6", "six"),
-        ("7", "seven"),
-        ("8", "eight"),
-        ("9", "nine"),
-        (".", "period"),
-        # TODO Fix this hacky approach to handling two-word homophones.
-        ("?", "questionmark"),
-        ("!", "exclamationmark"),
-        (",", "comma"),
-        (":", "colon"),
-        ("(", "openparen"),
-        (")", "closeparen"),
-        ("-", "hyphen"),
-    ])
 
     def __init__(self,
                  screen_coordinates,
                  screenshot,
                  result,
-                 confidence_threshold):
+                 confidence_threshold,
+                 homophones):
         self.screen_coordinates = screen_coordinates
         self.screenshot = screenshot
         self.result = result
         self.confidence_threshold = confidence_threshold
+        self.homophones = homophones
 
     def as_string(self):
         """Return the contents formatted as a string."""
@@ -453,6 +450,13 @@ class ScreenContents(object):
         # Avoid any changes that affect word length.
         return word.lower().replace(u'\u2019', '\'')
 
+    @staticmethod
+    def _normalize_homophones(old_homophones):
+        new_homophones = {}
+        for k, v in old_homophones.items():
+            new_homophones[ScreenContents._normalize(k)] = list(map(ScreenContents._normalize, v))
+        return new_homophones
+
     def _score_words(self,
                      candidates: Iterable[WordLocation],
                      normalized_targets: Iterable[str]) -> float:
@@ -463,7 +467,7 @@ class ScreenContents(object):
                     candidate: WordLocation,
                     normalized_target: str) -> float:
         candidate_text = self._normalize(candidate.text)
-        homophones = self._homophones.get(normalized_target, (normalized_target,))
+        homophones = self.homophones.get(normalized_target, (normalized_target,))
         best_ratio = max(fuzz.ratio(homophone, candidate_text,
                                     score_cutoff=self.confidence_threshold*100)
                          for homophone in homophones)
