@@ -4,6 +4,7 @@ from collections import deque
 from dataclasses import dataclass
 from itertools import islice
 import re
+from statistics import mean
 from typing import Iterable, Iterator, Optional, Sequence
 import numpy as np
 from PIL import Image, ImageDraw, ImageGrab, ImageOps
@@ -425,7 +426,7 @@ class ScreenContents(object):
     @staticmethod
     def _generate_candidates(result: _base.OcrResult, length: int) -> Iterator[Sequence[WordLocation]]:
         for line in result.lines:
-            candidates = ScreenContents._generate_candidates_from_line(line)
+            candidates = list(ScreenContents._generate_candidates_from_line(line))
             for candidate in candidates:
                 # Always include the word by itself in case the target words are smashed together.
                 yield [candidate]
@@ -472,7 +473,7 @@ class ScreenContents(object):
             # Handle the case where the target words are smashed together.
             return self._score_word(candidates[0], "".join(normalized_targets))
         scores = list(map(self._score_word, candidates, normalized_targets))
-        return sum(scores) if all(scores) else 0.0
+        return mean(scores) if all(scores) else 0.0
 
     def _score_word(self,
                     candidate: WordLocation,
