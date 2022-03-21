@@ -7,6 +7,7 @@ def test_generate_candidates_from_line():
         _base.OcrWord(text="snake_case:=", left=0, top=0, width=10, height=10),
         _base.OcrWord(text="[TestClass]", left=12, top=0, width=10, height=10),
         _base.OcrWord(text="camelCase", left=24, top=0, width=10, height=10),
+        _base.OcrWord(text="ALLCAPS", left=36, top=0, width=10, height=10),
     ])
     candidates = list(
         screen_ocr.ScreenContents._generate_candidates_from_line(line))
@@ -33,4 +34,6 @@ def test_generate_candidates_from_line():
                                 right_char_offset=4, left=25, top=0, width=10, height=10),
         screen_ocr.WordLocation(text="Case", left_char_offset=5,
                                 right_char_offset=0, left=25, top=0, width=10, height=10),
+        screen_ocr.WordLocation(text="ALLCAPS", left_char_offset=0,
+                                right_char_offset=0, left=37, top=0, width=10, height=10),
     ]

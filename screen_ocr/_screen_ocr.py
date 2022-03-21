@@ -391,7 +391,7 @@ class ScreenContents(object):
         result = self.find_nearest_words(target_word)
         return result[0] if (result and len(result) == 1) else None
 
-    _SUBWORD_REGEX = re.compile(r"([A-Za-z][a-z]*|.)")
+    _SUBWORD_REGEX = re.compile(r"([A-Z][A-Z]+|[A-Za-z][a-z]*|.)")
 
     def find_nearest_words(self, target: str) -> Optional[Sequence[WordLocation]]:
         """Return the location of the nearest sequence of the provided words.
@@ -425,8 +425,13 @@ class ScreenContents(object):
     @staticmethod
     def _generate_candidates(result: _base.OcrResult, length: int) -> Iterator[Sequence[WordLocation]]:
         for line in result.lines:
-            for window in ScreenContents._sliding_window(ScreenContents._generate_candidates_from_line(line), length):
-                yield window
+            candidates = ScreenContents._generate_candidates_from_line(line)
+            for candidate in candidates:
+                # Always include the word by itself in case the target words are smashed together.
+                yield [candidate]
+            if length > 1:
+                for window in ScreenContents._sliding_window(candidates, length):
+                    yield window
 
     @staticmethod
     def _generate_candidates_from_line(line: _base.OcrLine) -> Iterator[WordLocation]:
@@ -461,8 +466,11 @@ class ScreenContents(object):
         return new_homophones
 
     def _score_words(self,
-                     candidates: Iterable[WordLocation],
-                     normalized_targets: Iterable[str]) -> float:
+                     candidates: Sequence[WordLocation],
+                     normalized_targets: Sequence[str]) -> float:
+        if len(candidates) == 1:
+            # Handle the case where the target words are smashed together.
+            return self._score_word(candidates[0], "".join(normalized_targets))
         scores = list(map(self._score_word, candidates, normalized_targets))
         return sum(scores) if all(scores) else 0.0
 
