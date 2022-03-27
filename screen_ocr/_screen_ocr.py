@@ -442,11 +442,7 @@ class ScreenContents(object):
             for match in re.finditer(ScreenContents._SUBWORD_REGEX, word.text):
                 subword = match.group(0)
                 right_offset = len(word.text) - (left_offset + len(subword))
-                # Adjust position slightly to the right. For some reason Windows biases
-                # towards the left side of whatever is clicked (not confirmed on other
-                # operating systems).
-                right_shift = 1
-                yield WordLocation(left=int(word.left) + right_shift,
+                yield WordLocation(left=int(word.left),
                                    top=int(word.top),
                                    width=int(word.width),
                                    height=int(word.height),
