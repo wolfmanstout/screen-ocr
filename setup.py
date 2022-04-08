@@ -14,16 +14,14 @@ setuptools.setup(
     url="https://github.com/wolfmanstout/screen-ocr",
     packages=["screen_ocr"],
     install_requires=[
-        "numpy",
         "pillow",
         "rapidfuzz",
-        "scikit-image",
     ],
     # See README.md for backend recommendations.
     extras_require={
-        "tesseract": ["pytesseract", "pandas"],
+        "tesseract": ["numpy", "pytesseract", "pandas", "scikit-image"],
         "winrt": ["winrt"],
-        "easyocr": ["easyocr"],
+        "easyocr": ["easyocr", "numpy"],
     },
     classifiers=[
         "Programming Language :: Python :: 2",

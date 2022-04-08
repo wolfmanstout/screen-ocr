@@ -5,11 +5,10 @@ from dataclasses import dataclass
 from itertools import islice
 import re
 from statistics import mean
-from typing import Iterable, Iterator, Optional, Sequence
-import numpy as np
-from PIL import Image, ImageDraw, ImageGrab, ImageOps
+from typing import Iterator, Optional, Sequence
+# TODO Eliminate all below for out-of-box Talon compatibility
+from PIL import Image, ImageGrab, ImageOps
 from rapidfuzz import fuzz
-from skimage import filters, morphology, transform
 
 from . import _base
 
@@ -52,7 +51,7 @@ class Reader(object):
             return cls.create_reader(backend="winrt", **kwargs)
         else:
             defaults = {
-               "threshold_function": lambda data: filters.threshold_otsu(data),
+               "threshold_function": "otsu",
                "correction_block_size": 41,
                "margin": 60,
             }
@@ -63,6 +62,12 @@ class Reader(object):
                       backend,
                       tesseract_data_path=None,
                       tesseract_command=None,
+                      threshold_function="local_otsu",
+                      threshold_block_size=41,
+                      correction_block_size=31,
+                      convert_grayscale=True,
+                      shift_channels=True,
+                      debug_image_callback=None,
                       **kwargs):
         """Create reader with specified backend."""
         if backend == "tesseract":
@@ -70,22 +75,23 @@ class Reader(object):
                 raise ValueError("Tesseract backend unavailable. To install, run pip install screen-ocr[tesseract].")
             backend = _tesseract.TesseractBackend(
                 tesseract_data_path=tesseract_data_path,
-                tesseract_command=tesseract_command)
+                tesseract_command=tesseract_command,
+                threshold_function=threshold_function,
+                threshold_block_size=threshold_block_size,
+                correction_block_size=correction_block_size,
+                convert_grayscale=convert_grayscale,
+                shift_channels=shift_channels,
+                debug_image_callback=debug_image_callback)
             defaults = {
-                "threshold_function": lambda data: filters.rank.otsu(data, morphology.square(41)),
-                "correction_block_size": 31,
-                "margin": 50,
                 "resize_factor": 2,
-                "convert_grayscale": True,
-                "shift_channels": True,
-                "label_components": False,
+                "margin": 50,
             }
-            return cls(backend, **dict(defaults, **kwargs))
+            return cls(backend, debug_image_callback=debug_image_callback, **dict(defaults, **kwargs))
         elif backend == "easyocr":
             if not _easyocr:
                 raise ValueError("EasyOCR backend unavailable. To install, run pip install screen-ocr[easyocr].")
             backend = _easyocr.EasyOcrBackend()
-            return cls(backend, **kwargs)
+            return cls(backend, debug_image_callback=debug_image_callback, **kwargs)
         elif backend == "winrt":
             if not _winrt:
                 raise ValueError("WinRT backend unavailable. To install, run pip install screen-ocr[winrt].")
@@ -94,6 +100,7 @@ class Reader(object):
             except ImportError:
                 raise ValueError("WinRT backend unavailable. To install, run pip install screen-ocr[winrt].")
             return cls(backend,
+                       debug_image_callback=debug_image_callback,
                        **dict({"resize_factor": 2},
                               **kwargs))
         else:
@@ -101,27 +108,17 @@ class Reader(object):
 
     def __init__(self,
                  backend,
-                 threshold_function=None,
-                 correction_block_size=None,
                  margin=None,
                  resize_factor=None,
                  resize_method=None,
-                 convert_grayscale=False,
-                 shift_channels=False,
-                 label_components=False,
                  debug_image_callback=None,
                  confidence_threshold=None,
                  radius=None,
                  homophones=None):
         self._backend = backend
-        self.threshold_function = threshold_function
-        self.correction_block_size = correction_block_size
         self.margin = margin or 0
         self.resize_factor = resize_factor or 1
         self.resize_method = resize_method or Image.LANCZOS
-        self.convert_grayscale = convert_grayscale
-        self.shift_channels = shift_channels
-        self.label_components = label_components
         self.debug_image_callback = debug_image_callback
         self.confidence_threshold = confidence_threshold or 0.75
         self.radius = radius or 100
@@ -176,101 +173,11 @@ class Reader(object):
             image = image.resize(new_size, self.resize_method)
         if self.debug_image_callback:
             self.debug_image_callback("debug_resized", image)
-
-        data = np.array(image)
-        if self.shift_channels:
-            channels = [self._shift_channel(data[:, :, i], i) for i in range(3)]
-            data = np.stack(channels, axis=-1)
-
-        if self.threshold_function:
-            if self.convert_grayscale:
-                image = Image.fromarray(data)
-                image = image.convert("L")
-                data = np.array(image)
-                data = self._binarize_channel(data, None)
-            else:
-                channels = [self._binarize_channel(data[:, :, i], i)
-                            for i in range(3)]
-                data = np.stack(channels, axis=-1)
-                data = np.all(data, axis=-1)
-
-        image = Image.fromarray(data)
         if self.margin:
             image = ImageOps.expand(image, self.margin, "white")
         # Ensure consistent performance measurements.
         image.load()
-        if self.debug_image_callback:
-            self.debug_image_callback("debug_final", image)
         return image
-
-    def _binarize_channel(self, data, channel_index):
-        if self.debug_image_callback:
-            self.debug_image_callback("debug_before_{}".format(channel_index), Image.fromarray(data))
-        # Necessary to avoid ValueError from Otsu threshold.
-        if data.min() == data.max():
-            threshold = np.uint8(0)
-        else:
-            threshold = self.threshold_function(data)
-        if self.debug_image_callback:
-            if threshold.ndim == 2:
-                self.debug_image_callback("debug_threshold_{}".format(channel_index), Image.fromarray(threshold.astype(np.uint8)))
-            else:
-                self.debug_image_callback("debug_threshold_{}".format(channel_index), Image.fromarray(np.ones_like(data) * threshold))
-        data = data > threshold
-        if self.label_components:
-            labels, num_labels = measure.label(data, background=-1, return_num=True)
-            label_colors = np.zeros(num_labels + 1, np.bool_)
-            label_colors[labels] = data
-            background_labels = filters.rank.modal(labels.astype(np.uint16, copy=False),
-                                                   morphology.square(self.correction_block_size))
-            background_colors = label_colors[background_labels]
-        else:
-            white_sums = self._window_sums(data, self.correction_block_size)
-            black_sums = self._window_sums(~data, self.correction_block_size)
-            background_colors = white_sums > black_sums
-            # background_colors = filters.rank.modal(data.astype(np.uint8, copy=False),
-            #                                        morphology.square(self.correction_block_size))
-        if self.debug_image_callback:
-            self.debug_image_callback("debug_background_{}".format(channel_index), Image.fromarray(background_colors == True))
-        # Make the background consistently white (True).
-        data = data == background_colors
-        if self.debug_image_callback:
-            self.debug_image_callback("debug_after_{}".format(channel_index), Image.fromarray(data))
-        return data
-
-    @staticmethod
-    def _window_sums(image, window_size):
-        integral = transform.integral_image(image)
-        radius = int((window_size - 1) / 2)
-        top_left = np.zeros(image.shape, dtype=np.uint16)
-        top_left[radius:, radius:] = integral[:-radius, :-radius]
-        top_right = np.zeros(image.shape, dtype=np.uint16)
-        top_right[radius:, :-radius] = integral[:-radius, radius:]
-        top_right[radius:, -radius:] = integral[:-radius, -1:]
-        bottom_left = np.zeros(image.shape, dtype=np.uint16)
-        bottom_left[:-radius, radius:] = integral[radius:, :-radius]
-        bottom_left[-radius:, radius:] = integral[-1:, :-radius]
-        bottom_right = np.zeros(image.shape, dtype=np.uint16)
-        bottom_right[:-radius, :-radius] = integral[radius:, radius:]
-        bottom_right[-radius:, :-radius] = integral[-1:, radius:]
-        bottom_right[:-radius, -radius:] = integral[radius:, -1:]
-        bottom_right[-radius:, -radius:] = integral[-1, -1]
-        return bottom_right - bottom_left - top_right + top_left
-
-    @staticmethod
-    def _shift_channel(data, channel_index):
-        """Shifts each channel based on actual position in a typical LCD. This reduces
-        artifacts from subpixel rendering. Note that this assumes RGB left-to-right
-        ordering and a subpixel size of 1 in the resized image.
-        """
-        channel_shift = channel_index - 1
-        if channel_shift != 0:
-            data = np.roll(data, channel_shift, axis=1)
-            if channel_shift == -1:
-                data[:, -1] = data[:, -2]
-            elif channel_shift == 1:
-                data[:, 0] = data[:, 1]
-        return data
 
 
 def default_homophones():
