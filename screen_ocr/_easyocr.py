@@ -10,10 +10,18 @@ class EasyOcrBackend(_base.OcrBackend):
 
     def run_ocr(self, image):
         result = self._easyocr.readtext(np.array(image))
-        lines = [_base.OcrLine([_base.OcrWord(text,
-                                              box[0][0],
-                                              box[0][1],
-                                              box[2][0] - box[0][0],
-                                              box[2][1] - box[0][1])])
-                 for box, text, confidence in result]
+        lines = [
+            _base.OcrLine(
+                [
+                    _base.OcrWord(
+                        text,
+                        box[0][0],
+                        box[0][1],
+                        box[2][0] - box[0][0],
+                        box[2][1] - box[0][1],
+                    )
+                ]
+            )
+            for box, text, confidence in result
+        ]
         return _base.OcrResult(lines)

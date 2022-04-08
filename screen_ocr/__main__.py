@@ -7,5 +7,5 @@ import screen_ocr
 ocr_reader = screen_ocr.Reader.create_quality_reader(radius=10000)
 # Use screen_coordinates to determine where to crop nearby. Won't matter here
 # due to large radius.
-results = ocr_reader.read_nearby(screen_coordinates=(0,0))
+results = ocr_reader.read_nearby(screen_coordinates=(0, 0))
 print(results.as_string())

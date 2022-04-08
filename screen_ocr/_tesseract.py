@@ -8,23 +8,29 @@ from . import _base
 
 
 class TesseractBackend(_base.OcrBackend):
-    def __init__(self,
-                 tesseract_data_path=None,
-                 tesseract_command=None,
-                 threshold_function=None,
-                 threshold_block_size=None,
-                 correction_block_size=None,
-                 convert_grayscale=False,
-                 shift_channels=False,
-                 debug_image_callback=None,
-                 ):
-        self.tesseract_data_path = tesseract_data_path or r"C:\Program Files\Tesseract-OCR\tessdata"
-        self.tesseract_command = tesseract_command or r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    def __init__(
+        self,
+        tesseract_data_path=None,
+        tesseract_command=None,
+        threshold_function=None,
+        threshold_block_size=None,
+        correction_block_size=None,
+        convert_grayscale=False,
+        shift_channels=False,
+        debug_image_callback=None,
+    ):
+        self.tesseract_data_path = (
+            tesseract_data_path or r"C:\Program Files\Tesseract-OCR\tessdata"
+        )
+        self.tesseract_command = (
+            tesseract_command or r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        )
         if threshold_function == "otsu":
             self.threshold_function = lambda data: filters.threshold_otsu(data)
         elif threshold_function == "local_otsu":
             self.threshold_function = lambda data: filters.rank.otsu(
-                data, morphology.square(threshold_block_size))
+                data, morphology.square(threshold_block_size)
+            )
         else:
             self.threshold_function = threshold_function
         self.correction_block_size = correction_block_size
@@ -36,19 +42,23 @@ class TesseractBackend(_base.OcrBackend):
         image = self._preprocess(image)
         tessdata_dir_config = r'--tessdata-dir "{}"'.format(self.tesseract_data_path)
         pytesseract.pytesseract.tesseract_cmd = self.tesseract_command
-        results = pytesseract.image_to_data(image,
-                                            config=tessdata_dir_config,
-                                            output_type=pytesseract.Output.DATAFRAME)
+        results = pytesseract.image_to_data(
+            image, config=tessdata_dir_config, output_type=pytesseract.Output.DATAFRAME
+        )
         lines = []
         words = []
         for _, box in results.iterrows():
             # Word
             if box.level == 5:
                 text = box.text
-                text = (six.text_type(text, encoding="utf-8")
-                        if isinstance(text, six.binary_type)
-                        else six.text_type(text))
-                words.append(_base.OcrWord(text, box.left, box.top, box.width, box.height))
+                text = (
+                    six.text_type(text, encoding="utf-8")
+                    if isinstance(text, six.binary_type)
+                    else six.text_type(text)
+                )
+                words.append(
+                    _base.OcrWord(text, box.left, box.top, box.width, box.height)
+                )
             # End of line
             if box.level == 4:
                 if words:
@@ -72,8 +82,7 @@ class TesseractBackend(_base.OcrBackend):
                 data = np.array(image)
                 data = self._binarize_channel(data, None)
             else:
-                channels = [self._binarize_channel(data[:, :, i], i)
-                            for i in range(3)]
+                channels = [self._binarize_channel(data[:, :, i], i) for i in range(3)]
                 data = np.stack(channels, axis=-1)
                 data = np.all(data, axis=-1)
 
@@ -86,7 +95,9 @@ class TesseractBackend(_base.OcrBackend):
 
     def _binarize_channel(self, data, channel_index):
         if self.debug_image_callback:
-            self.debug_image_callback("debug_before_{}".format(channel_index), Image.fromarray(data))
+            self.debug_image_callback(
+                "debug_before_{}".format(channel_index), Image.fromarray(data)
+            )
         # Necessary to avoid ValueError from Otsu threshold.
         if data.min() == data.max():
             threshold = np.uint8(0)
@@ -94,19 +105,30 @@ class TesseractBackend(_base.OcrBackend):
             threshold = self.threshold_function(data)
         if self.debug_image_callback:
             if threshold.ndim == 2:
-                self.debug_image_callback("debug_threshold_{}".format(channel_index), Image.fromarray(threshold.astype(np.uint8)))
+                self.debug_image_callback(
+                    "debug_threshold_{}".format(channel_index),
+                    Image.fromarray(threshold.astype(np.uint8)),
+                )
             else:
-                self.debug_image_callback("debug_threshold_{}".format(channel_index), Image.fromarray(np.ones_like(data) * threshold))
+                self.debug_image_callback(
+                    "debug_threshold_{}".format(channel_index),
+                    Image.fromarray(np.ones_like(data) * threshold),
+                )
         data = data > threshold
         white_sums = self._window_sums(data, self.correction_block_size)
         black_sums = self._window_sums(~data, self.correction_block_size)
         background_colors = white_sums > black_sums
         if self.debug_image_callback:
-            self.debug_image_callback("debug_background_{}".format(channel_index), Image.fromarray(background_colors == True))
+            self.debug_image_callback(
+                "debug_background_{}".format(channel_index),
+                Image.fromarray(background_colors == True),
+            )
         # Make the background consistently white (True).
         data = data == background_colors
         if self.debug_image_callback:
-            self.debug_image_callback("debug_after_{}".format(channel_index), Image.fromarray(data))
+            self.debug_image_callback(
+                "debug_after_{}".format(channel_index), Image.fromarray(data)
+            )
         return data
 
     @staticmethod

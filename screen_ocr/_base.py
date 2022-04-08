@@ -1,5 +1,6 @@
 """Base classes used by backend implementations."""
 
+
 class OcrBackend(object):
     """Base class for backend used to perform OCR."""
 

@@ -9,17 +9,19 @@ def cost(result, gt):
 
 
 class OcrEstimator(BaseEstimator):
-    def __init__(self,
-                 backend="tesseract",
-                 threshold_type=None,
-                 block_size=None,
-                 correction_block_size=None,
-                 margin=None,
-                 resize_factor=None,
-                 resize_method=None,
-                 convert_grayscale=None,
-                 shift_channels=None,
-                 label_components=None):
+    def __init__(
+        self,
+        backend="tesseract",
+        threshold_type=None,
+        block_size=None,
+        correction_block_size=None,
+        margin=None,
+        resize_factor=None,
+        resize_method=None,
+        convert_grayscale=None,
+        shift_channels=None,
+        label_components=None,
+    ):
         self.backend = backend
         self.threshold_type = threshold_type
         self.block_size = block_size
@@ -35,13 +37,21 @@ class OcrEstimator(BaseEstimator):
         if self.threshold_type == "otsu":
             threshold_function = lambda data: filters.threshold_otsu(data)
         elif self.threshold_type == "local_otsu":
-            threshold_function = lambda data: filters.rank.otsu(data, morphology.square(self.block_size))
+            threshold_function = lambda data: filters.rank.otsu(
+                data, morphology.square(self.block_size)
+            )
         elif self.threshold_type == "local":
-            threshold_function = lambda data: filters.threshold_local(data, self.block_size)
+            threshold_function = lambda data: filters.threshold_local(
+                data, self.block_size
+            )
         elif self.threshold_type == "niblack":
-            threshold_function = lambda data: filters.threshold_niblack(data, self.block_size)
+            threshold_function = lambda data: filters.threshold_niblack(
+                data, self.block_size
+            )
         elif self.threshold_type == "sauvola":
-            threshold_function = lambda data: filters.threshold_sauvola(data, self.block_size)
+            threshold_function = lambda data: filters.threshold_sauvola(
+                data, self.block_size
+            )
         elif self.threshold_type is None:
             threshold_function = None
         else:
@@ -56,7 +66,8 @@ class OcrEstimator(BaseEstimator):
             convert_grayscale=self.convert_grayscale,
             shift_channels=self.shift_channels,
             label_components=self.label_components,
-            debug_image_callback=None)
+            debug_image_callback=None,
+        )
 
     def score(self, X, y):
         error = 0
@@ -64,5 +75,3 @@ class OcrEstimator(BaseEstimator):
             result = self.ocr_reader_.read_image(image).as_string()
             error += cost(result, gt_text)
         return -error
-            
-
