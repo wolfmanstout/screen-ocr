@@ -348,6 +348,7 @@ class ScreenContents(object):
             (self._score_words(candidates, target_words), candidates)
             for candidates in self._generate_candidates(self.result, len(target_words))
         ]
+        # print("\n".join(map(str, scored_words)))
         scored_words = [words for words in scored_words if words[0]]
         if not scored_words:
             return None
@@ -423,14 +424,20 @@ class ScreenContents(object):
             # Handle the case where the target words are smashed together.
             return self._score_word(candidates[0], "".join(normalized_targets))
         scores = list(map(self._score_word, candidates, normalized_targets))
-        return mean(scores) if all(scores) else 0.0
+        score = sum(
+            score * len(word) for score, word in zip(scores, normalized_targets)
+        ) / sum(map(len, normalized_targets))
+        return score if score >= self.confidence_threshold else 0
 
     def _score_word(self, candidate: WordLocation, normalized_target: str) -> float:
         candidate_text = self._normalize(candidate.text)
         homophones = self.homophones.get(normalized_target, (normalized_target,))
         best_ratio = max(
             fuzz.ratio(
-                homophone, candidate_text, score_cutoff=self.confidence_threshold * 100
+                # Don't filter to full confidence threshold yet in case of multiple words.
+                homophone,
+                candidate_text,
+                score_cutoff=self.confidence_threshold / 2 * 100,
             )
             for homophone in homophones
         )
