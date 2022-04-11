@@ -142,7 +142,9 @@ class Reader(object):
         self.confidence_threshold = confidence_threshold or 0.75
         self.radius = radius or 100
         self.homophones = (
-            ScreenContents._normalize_homophones(homophones) or default_homophones()
+            ScreenContents._normalize_homophones(homophones)
+            if homophones
+            else default_homophones()
         )
 
     def read_nearby(self, screen_coordinates):
