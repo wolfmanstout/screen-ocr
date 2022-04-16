@@ -424,7 +424,8 @@ class ScreenContents(object):
     ) -> float:
         if len(candidates) == 1:
             # Handle the case where the target words are smashed together.
-            return self._score_word(candidates[0], "".join(normalized_targets))
+            score = self._score_word(candidates[0], "".join(normalized_targets))
+            return score if score >= self.confidence_threshold else 0
         scores = list(map(self._score_word, candidates, normalized_targets))
         score = sum(
             score * len(word) for score, word in zip(scores, normalized_targets)
