@@ -3,6 +3,13 @@ import asyncio
 import threading
 from concurrent import futures
 
+# Attempt to find winrt module and let error propagate if it is not available. We don't want to
+# import winrt here because it needs to be done in a background thread.
+import importlib.util
+
+if not importlib.util.find_spec("winrt"):
+    raise ImportError("Could not find winrt module")
+
 from . import _base
 
 
