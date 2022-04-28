@@ -388,8 +388,7 @@ class ScreenContents(object):
                 # Always include the word by itself in case the target words are smashed together.
                 yield [candidate]
             if length > 1:
-                for window in ScreenContents._sliding_window(candidates, length):
-                    yield window
+                yield from ScreenContents._sliding_window(candidates, length)
 
     @staticmethod
     def _generate_candidates_from_line(line: _base.OcrLine) -> Iterator[WordLocation]:
