@@ -333,6 +333,11 @@ class ScreenContents(object):
         sequences = self.find_matching_words(target)
         if not sequences:
             return None
+        return self.find_nearest_words_within_matches(sequences)
+
+    def find_nearest_words_within_matches(
+        self, sequences: Sequence[Sequence[WordLocation]]
+    ) -> Sequence[WordLocation]:
         distance_to_words = [
             (
                 self._distance_squared(
