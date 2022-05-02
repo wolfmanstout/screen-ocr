@@ -126,21 +126,23 @@ class Reader(object):
     def __init__(
         self,
         backend,
-        margin=None,
-        resize_factor=None,
-        resize_method=None,
+        margin=0,
+        resize_factor=1,
+        resize_method=Image.LANCZOS,
         debug_image_callback=None,
-        confidence_threshold=None,
-        radius=None,
+        confidence_threshold=0.75,
+        radius=100,  # screenshot "radius"
+        search_radius=75,
         homophones=None,
     ):
         self._backend = backend
-        self.margin = margin or 0
-        self.resize_factor = resize_factor or 1
-        self.resize_method = resize_method or Image.LANCZOS
+        self.margin = margin
+        self.resize_factor = resize_factor
+        self.resize_method = resize_method
         self.debug_image_callback = debug_image_callback
-        self.confidence_threshold = confidence_threshold or 0.75
-        self.radius = radius or 100
+        self.confidence_threshold = confidence_threshold
+        self.radius = radius
+        self.search_radius = search_radius
         self.homophones = (
             ScreenContents._normalize_homophones(homophones)
             if homophones
@@ -161,10 +163,12 @@ class Reader(object):
         result = self._adjust_result(result, offset)
         return ScreenContents(
             screen_coordinates=screen_coordinates,
+            screen_offset=offset,
             screenshot=image,
             result=result,
             confidence_threshold=self.confidence_threshold,
             homophones=self.homophones,
+            search_radius=self.search_radius,
         )
 
     def _screenshot_nearby(self, screen_coordinates):
@@ -278,13 +282,23 @@ class ScreenContents(object):
     """OCR'd contents of a portion of the screen."""
 
     def __init__(
-        self, screen_coordinates, screenshot, result, confidence_threshold, homophones
+        self,
+        screen_coordinates,
+        screen_offset,
+        screenshot,
+        result,
+        confidence_threshold,
+        homophones,
+        search_radius,
     ):
         self.screen_coordinates = screen_coordinates
+        self.screen_offset = screen_offset
         self.screenshot = screenshot
         self.result = result
         self.confidence_threshold = confidence_threshold
         self.homophones = homophones
+        self.search_radius = search_radius
+        self._search_radius_squared = search_radius * search_radius
 
     def as_string(self):
         """Return the contents formatted as a string."""
@@ -381,7 +395,17 @@ class ScreenContents(object):
         if not scored_words:
             return []
         max_score = max(score for score, _ in scored_words)
-        return [words for score, words in scored_words if score == max_score]
+        best_matches = [words for score, words in scored_words if score == max_score]
+        return [
+            words
+            for words in best_matches
+            if self._distance_squared(
+                (words[0].left + words[-1].right) / 2.0,
+                (words[0].top + words[-1].bottom) / 2.0,
+                *self.screen_coordinates
+            )
+            <= self._search_radius_squared
+        ]
 
     @staticmethod
     def _generate_candidates(
