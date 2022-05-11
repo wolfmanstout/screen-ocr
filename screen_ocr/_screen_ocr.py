@@ -131,8 +131,8 @@ class Reader(object):
         resize_method=Image.LANCZOS,
         debug_image_callback=None,
         confidence_threshold=0.75,
-        radius=100,  # screenshot "radius"
-        search_radius=75,
+        radius=150,  # screenshot "radius"
+        search_radius=100,
         homophones=None,
     ):
         self._backend = backend
