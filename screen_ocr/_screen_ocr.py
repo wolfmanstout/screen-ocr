@@ -149,15 +149,25 @@ class Reader(object):
             else default_homophones()
         )
 
-    def read_nearby(self, screen_coordinates):
+    def read_nearby(self, screen_coordinates, search_radius=None, crop_radius=None):
         """Return ScreenContents nearby the provided coordinates."""
-        screenshot, bounding_box = self._screenshot_nearby(screen_coordinates)
+        crop_radius = crop_radius or self.radius
+        search_radius = search_radius or self.search_radius
+        screenshot, bounding_box = self._screenshot_nearby(
+            screen_coordinates, crop_radius
+        )
         return self.read_image(
-            screenshot, offset=bounding_box[0:2], screen_coordinates=screen_coordinates
+            screenshot,
+            offset=bounding_box[0:2],
+            screen_coordinates=screen_coordinates,
+            search_radius=search_radius,
         )
 
-    def read_image(self, image, offset=(0, 0), screen_coordinates=(0, 0)):
+    def read_image(
+        self, image, offset=(0, 0), screen_coordinates=(0, 0), search_radius=None
+    ):
         """Return ScreenContents of the provided image."""
+        search_radius = search_radius or self.search_radius
         preprocessed_image = self._preprocess(image)
         result = self._backend.run_ocr(preprocessed_image)
         result = self._adjust_result(result, offset)
@@ -168,18 +178,18 @@ class Reader(object):
             result=result,
             confidence_threshold=self.confidence_threshold,
             homophones=self.homophones,
-            search_radius=self.search_radius,
+            search_radius=search_radius,
         )
 
-    def _screenshot_nearby(self, screen_coordinates):
+    def _screenshot_nearby(self, screen_coordinates, crop_radius):
         # TODO Consider cropping within grab() for performance. Requires knowledge
         # of screen bounds.
         screenshot = ImageGrab.grab()
         bounding_box = (
-            max(0, screen_coordinates[0] - self.radius),
-            max(0, screen_coordinates[1] - self.radius),
-            min(screenshot.width, screen_coordinates[0] + self.radius),
-            min(screenshot.height, screen_coordinates[1] + self.radius),
+            max(0, screen_coordinates[0] - crop_radius),
+            max(0, screen_coordinates[1] - crop_radius),
+            min(screenshot.width, screen_coordinates[0] + crop_radius),
+            min(screenshot.height, screen_coordinates[1] + crop_radius),
         )
         screenshot = screenshot.crop(bounding_box)
         return screenshot, bounding_box
