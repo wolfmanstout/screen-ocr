@@ -1,19 +1,24 @@
 """Library for processing screen contents using OCR."""
 
+import os
+import re
+
 from collections import deque
 from dataclasses import dataclass
 from itertools import islice
-import re
 from statistics import mean
 from typing import Iterator, Optional, Sequence
 
-# TODO Eliminate all below for out-of-box Talon compatibility
-from PIL import Image, ImageGrab, ImageOps
-from rapidfuzz import fuzz
+try:
+    from rapidfuzz import fuzz
+except ImportError:
+    print("Attempting to fall back to pure python rapidfuzz")
+    os.environ["RAPIDFUZZ_IMPLEMENTATION"] = "python"
+    from rapidfuzz import fuzz
 
 from . import _base
 
-# Optional packages.
+# Optional backends.
 try:
     from . import _tesseract
 except (ImportError, SyntaxError):
@@ -23,9 +28,24 @@ try:
 except ImportError:
     _easyocr = None
 try:
+    from . import _talon
+except ImportError:
+    _talon = None
+try:
     from . import _winrt
 except (ImportError, SyntaxError):
     _winrt = None
+
+# Optional packages needed for certain backends.
+try:
+    from PIL import Image, ImageGrab, ImageOps
+except ImportError:
+    Image = ImageGrab = ImageOps = None
+try:
+    from talon import screen
+    from talon.types import rect
+except ImportError:
+    screen = rect = None
 
 
 class Reader(object):
@@ -120,6 +140,13 @@ class Reader(object):
                 debug_image_callback=debug_image_callback,
                 **dict({"resize_factor": 2}, **kwargs)
             )
+        elif backend == "talon":
+            if not _talon:
+                raise ValueError(
+                    "Talon backend unavailable. Requires installing and running in Talon (see talonvoice.com)."
+                )
+            backend = _talon.TalonBackend()
+            return cls(backend, debug_image_callback=debug_image_callback, **kwargs)
         else:
             return cls(backend, **kwargs)
 
@@ -128,7 +155,7 @@ class Reader(object):
         backend,
         margin=0,
         resize_factor=1,
-        resize_method=Image.LANCZOS,
+        resize_method=None,
         debug_image_callback=None,
         confidence_threshold=0.75,
         radius=200,  # screenshot "radius"
@@ -138,7 +165,9 @@ class Reader(object):
         self._backend = backend
         self.margin = margin
         self.resize_factor = resize_factor
-        self.resize_method = resize_method
+        self.resize_method = resize_method or (
+            Image.LANCZOS if resize_factor != 1 else None
+        )
         self.debug_image_callback = debug_image_callback
         self.confidence_threshold = confidence_threshold
         self.radius = radius
@@ -181,17 +210,38 @@ class Reader(object):
             search_radius=search_radius,
         )
 
+    # TODO: Refactor methods into backend instead of using this.
+    def _is_talon_backend(self):
+        return _talon and isinstance(self._backend, _talon.TalonBackend)
+
     def _screenshot_nearby(self, screen_coordinates, crop_radius):
-        # TODO Consider cropping within grab() for performance. Requires knowledge
-        # of screen bounds.
-        screenshot = ImageGrab.grab()
-        bounding_box = (
-            max(0, screen_coordinates[0] - crop_radius),
-            max(0, screen_coordinates[1] - crop_radius),
-            min(screenshot.width, screen_coordinates[0] + crop_radius),
-            min(screenshot.height, screen_coordinates[1] + crop_radius),
-        )
-        screenshot = screenshot.crop(bounding_box)
+        if self._is_talon_backend():
+            screen_box = screen.main().rect
+            bounding_box = (
+                max(0, screen_coordinates[0] - crop_radius),
+                max(0, screen_coordinates[1] - crop_radius),
+                min(screen_box.width, screen_coordinates[0] + crop_radius),
+                min(screen_box.height, screen_coordinates[1] + crop_radius),
+            )
+            screenshot = screen.capture_rect(
+                rect.Rect(
+                    bounding_box[0],
+                    bounding_box[1],
+                    bounding_box[2] - bounding_box[0],
+                    bounding_box[3] - bounding_box[1],
+                )
+            )
+        else:
+            # TODO Consider cropping within grab() for performance. Requires knowledge
+            # of screen bounds.
+            screenshot = ImageGrab.grab()
+            bounding_box = (
+                max(0, screen_coordinates[0] - crop_radius),
+                max(0, screen_coordinates[1] - crop_radius),
+                min(screenshot.width, screen_coordinates[0] + crop_radius),
+                min(screenshot.height, screen_coordinates[1] + crop_radius),
+            )
+            screenshot = screenshot.crop(bounding_box)
         return screenshot, bounding_box
 
     def _adjust_result(self, result, offset):
@@ -199,8 +249,12 @@ class Reader(object):
         for line in result.lines:
             words = []
             for word in line.words:
-                left = ((word.left - self.margin) / self.resize_factor) + offset[0]
-                top = ((word.top - self.margin) / self.resize_factor) + offset[1]
+                left = (word.left - self.margin) / self.resize_factor
+                if not self._is_talon_backend():
+                    left += offset[0]
+                top = (word.top - self.margin) / self.resize_factor
+                if not self._is_talon_backend():
+                    top += offset[1]
                 width = word.width / self.resize_factor
                 height = word.height / self.resize_factor
                 words.append(_base.OcrWord(word.text, left, top, width, height))
@@ -218,8 +272,9 @@ class Reader(object):
             self.debug_image_callback("debug_resized", image)
         if self.margin:
             image = ImageOps.expand(image, self.margin, "white")
-        # Ensure consistent performance measurements.
-        image.load()
+        if not self._is_talon_backend():
+            # Ensure consistent performance measurements.
+            image.load()
         return image
 
 

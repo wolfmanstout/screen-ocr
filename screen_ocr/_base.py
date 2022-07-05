@@ -1,7 +1,10 @@
 """Base classes used by backend implementations."""
 
+from dataclasses import dataclass
+from typing import List
 
-class OcrBackend(object):
+
+class OcrBackend:
     """Base class for backend used to perform OCR."""
 
     def run_ocr(self, image):
@@ -9,20 +12,20 @@ class OcrBackend(object):
         raise NotImplementedError()
 
 
-class OcrResult(object):
-    def __init__(self, lines):
-        self.lines = lines
-
-
-class OcrLine(object):
-    def __init__(self, words):
-        self.words = words
-
-
+@dataclass
 class OcrWord:
-    def __init__(self, text, left, top, width, height):
-        self.text = text
-        self.left = left
-        self.top = top
-        self.width = width
-        self.height = height
+    text: str
+    left: float
+    top: float
+    width: float
+    height: float
+
+
+@dataclass
+class OcrLine:
+    words: List[OcrWord]
+
+
+@dataclass
+class OcrResult:
+    lines: List[OcrLine]
