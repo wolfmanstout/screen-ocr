@@ -249,12 +249,8 @@ class Reader(object):
         for line in result.lines:
             words = []
             for word in line.words:
-                left = (word.left - self.margin) / self.resize_factor
-                if not self._is_talon_backend():
-                    left += offset[0]
-                top = (word.top - self.margin) / self.resize_factor
-                if not self._is_talon_backend():
-                    top += offset[1]
+                left = (word.left - self.margin) / self.resize_factor + offset[0]
+                top = (word.top - self.margin) / self.resize_factor + offset[1]
                 width = word.width / self.resize_factor
                 height = word.height / self.resize_factor
                 words.append(_base.OcrWord(word.text, left, top, width, height))
