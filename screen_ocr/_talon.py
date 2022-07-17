@@ -80,6 +80,13 @@ class TalonBackend(_base.OcrBackend):
         )
         # Unflip the index.
         last_text = (columns_with_text.size - 1) - flipped_first_text
+        # Hacky fix to underlined text or other cases where there's only
+        # whitespace on one end.
+        if first_text > last_text:
+            if first_text <= flipped_first_text:
+                last_text = width - 1
+            else:
+                first_text = left - left_column
         return (
             left_column + first_text,  # left
             top,
