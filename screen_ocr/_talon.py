@@ -68,20 +68,21 @@ class TalonBackend(_base.OcrBackend):
             else ~thresholded
         )
         columns_with_text = binarized.any(axis=0)
-        # Search for left side as first text after background. This will also
-        # work if no background is present, because first_background will be 0.
-        first_background = columns_with_text.argmin()
-        first_text = columns_with_text[first_background:].argmax() + first_background
+        # Search for left side as first text after background.
+        text_left_indices = (np.diff(columns_with_text.astype(int)) == 1).nonzero()
+        first_text = text_left_indices[0][0] + 1 if text_left_indices[0].size > 0 else 0
         # Do the same thing but flipped left-to-right to get the right side.
         flipped = columns_with_text[::-1]
-        flipped_first_background = flipped.argmin()
+        flipped_text_left_indices = (np.diff(flipped.astype(int)) == 1).nonzero()
         flipped_first_text = (
-            flipped[flipped_first_background:].argmax() + flipped_first_background
+            flipped_text_left_indices[0][0] + 1
+            if flipped_text_left_indices[0].size > 0
+            else 0
         )
         # Unflip the index.
         last_text = (columns_with_text.size - 1) - flipped_first_text
-        # Hacky fix to underlined text or other cases where there's only
-        # whitespace on one end.
+        # Hacky fix for bad cases where whitespace is surrounded by text. Assume
+        # that bounding box is cut off on one end.
         if first_text > last_text:
             if first_text <= flipped_first_text:
                 last_text = width - 1
