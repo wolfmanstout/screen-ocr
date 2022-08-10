@@ -14,6 +14,7 @@ try:
 except ImportError:
     print("Attempting to fall back to pure python rapidfuzz")
     os.environ["RAPIDFUZZ_IMPLEMENTATION"] = "python"
+    os.environ["JAROWINKLER_IMPLEMENTATION"] = "python"
     from rapidfuzz import fuzz
 
 from . import _base
