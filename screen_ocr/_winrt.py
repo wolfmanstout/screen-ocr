@@ -31,7 +31,6 @@ class WinRtBackend(_base.OcrBackend):
             for language in ocr.OcrEngine.get_available_recognizer_languages():
                 if language.language_tag == language_tag:
                     engine = ocr.OcrEngine.try_create_from_language(language)
-                    print(f'CREATED {engine} with {language_tag}')
                     break
 
         if not engine:
