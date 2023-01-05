@@ -99,6 +99,7 @@ class Reader:
         convert_grayscale=True,
         shift_channels=True,
         debug_image_callback=None,
+        language_tag=None,
         **kwargs,
     ) -> "Reader":
         """Create reader with specified backend."""
