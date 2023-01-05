@@ -142,7 +142,7 @@ class Reader:
                     "WinRT backend unavailable. To install, run pip install screen-ocr[winrt]."
                 )
             try:
-                backend = _winrt.WinRtBackend()
+                backend = _winrt.WinRtBackend(language_tag)
             except ImportError:
                 raise ValueError(
                     "WinRT backend unavailable. To install, run pip install screen-ocr[winrt]."
