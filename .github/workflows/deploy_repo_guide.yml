@@ -11,6 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: wolfmanstout/deploy-repo-guide@bc2a7ff1f58d3cffa481826186ec2ba3d3283491
+      - uses: wolfmanstout/deploy-repo-guide@c021897647935554b36e9bf1b8e8e69c058ea9f0
         with:
           gemini-key: ${{ secrets.LLM_GEMINI_KEY }}
