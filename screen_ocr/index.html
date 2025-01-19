@@ -9,7 +9,7 @@
       
       
       
-        <link rel="prev" href="../.github/workflows/">
+        <link rel="prev" href="../_github/workflows/">
       
       
         <link rel="next" href="../tests/">
@@ -259,7 +259,7 @@
             
   
   <span class="md-ellipsis">
-    .github
+     github
   </span>
   
 
@@ -269,7 +269,7 @@
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
-            .github
+             github
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
@@ -280,7 +280,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.github/" class="md-nav__link">
+      <a href="../_github/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -336,7 +336,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.github/workflows/" class="md-nav__link">
+      <a href="../_github/workflows/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -540,36 +540,38 @@
 
 
 <h1 id="screen_ocr">screen_ocr</h1>
-<p>The <code>screen_ocr</code> directory contains the core logic for the screen-ocr library. It provides a high-level API for performing OCR on screen regions, while supporting multiple OCR backends.</p>
+<p>The <code>screen_ocr</code> directory contains the core logic for the <code>screen-ocr</code> library. It provides functionality to perform OCR on screen captures using different backends.</p>
 <p>The most important files are:</p>
 <ul>
 <li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_screen_ocr.py"><code>_screen_ocr.py</code></a>: This file contains the main <code>Reader</code> class, which is the primary entry point for using the library. It also contains the <code>ScreenContents</code> class, which is used to store the results of OCR operations. The <code>Reader</code> class supports multiple backends (Tesseract, EasyOCR, WinRT, and Talon), and provides methods for creating readers optimized for quality or speed. It also handles screen capture, image preprocessing, and result postprocessing. The <code>ScreenContents</code> class provides methods for searching for specific text on the screen, including fuzzy matching and homophone handling.</p>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>_base.py</code></a>: Defines the base classes for the library, including <code>OcrWord</code>, <code>OcrLine</code>, <code>OcrResult</code>, and the abstract <code>OcrBackend</code> class. These classes establish a common interface for different OCR implementations.</p>
 </li>
 <li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>_base.py</code></a>: This file defines the base classes used by the various backend implementations. It defines <code>OcrWord</code>, <code>OcrLine</code>, <code>OcrResult</code> as dataclasses, and <code>OcrBackend</code> as an abstract class that all concrete backends must inherit from.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_tesseract.py"><code>_tesseract.py</code></a>: This file implements the Tesseract OCR backend. It uses the <code>pytesseract</code> library to perform OCR, and it also implements several image preprocessing steps to improve OCR accuracy, including channel shifting, thresholding, and background correction.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_easyocr.py"><code>_easyocr.py</code></a>: This file implements the EasyOCR backend. It uses the <code>easyocr</code> library to perform OCR.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_winrt.py"><code>_winrt.py</code></a>: This file implements the WinRT OCR backend, which is available on Windows. It uses the Windows SDK to perform OCR. It initializes the engine on a background thread to avoid threading issues, and performs asynchronous calls.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_talon.py"><code>_talon.py</code></a>: This file implements the Talon OCR backend, which uses the experimental <code>talon.experimental.ocr</code> API. It also includes logic to adjust the bounding boxes of words to more tightly fit the text.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__init__.py"><code>__init__.py</code></a>: This file makes the classes and functions from <code>_screen_ocr.py</code> available in the <code>screen_ocr</code> package.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__main__.py"><code>__main__.py</code></a>: This file provides a simple command-line interface for performing OCR on the screen.</p>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_screen_ocr.py"><code>_screen_ocr.py</code></a>: This is the main file that provides the high-level API for the library. It contains the <code>Reader</code> class, which is used to create OCR readers with specified backends, and the <code>ScreenContents</code> class, which stores and processes the results of OCR. It also includes logic for fuzzy matching, homophone handling, and more. The <code>Reader</code> class is designed to be the main entry point for users of the library. It supports multiple backends, such as tesseract, easyocr, winrt, and talon, and allows users to configure them through the <code>create_reader</code> method. It also provides convenience methods such as <code>create_quality_reader</code> and <code>create_fast_reader</code>. <code>ScreenContents</code> encapsulates the result of an OCR operation, providing a variety of useful methods for accessing and processing the extracted text and its location on screen.</p>
 </li>
 </ul>
-<p>The files in this directory work together as follows:</p>
-<p>The user interacts with the <code>Reader</code> class in <code>_screen_ocr.py</code>, which acts as a facade. The user selects an OCR backend (Tesseract, EasyOCR, WinRT, or Talon) when creating a <code>Reader</code> instance. The <code>Reader</code> class captures the screen (or a portion of it), preprocesses the image, and then delegates the OCR operation to the selected backend. The backend-specific files (<code>_tesseract.py</code>, <code>_easyocr.py</code>, <code>_winrt.py</code>, <code>_talon.py</code>) implement the <code>OcrBackend</code> interface from <code>_base.py</code>, and they use their respective OCR libraries or APIs to perform the actual OCR. The results from the backend are returned to the <code>Reader</code> which creates a <code>ScreenContents</code> object. The <code>ScreenContents</code> object stores the OCR results and provides methods for searching and manipulating the text.</p>
+<p>The other files provide specific backend implementations:</p>
+<ul>
+<li>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_easyocr.py"><code>_easyocr.py</code></a>: Implements the <code>OcrBackend</code> interface using the <code>easyocr</code> library. It initializes <code>easyocr.Reader</code> with the English language and uses its <code>readtext</code> method to perform OCR, converting the result to the format used by <code>screen-ocr</code>.</p>
+</li>
+<li>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_talon.py"><code>_talon.py</code></a>: Implements the <code>OcrBackend</code> interface using the <code>talon</code> library. This backend relies on the experimental OCR functionality of <code>talon</code>, and includes some platform specific adjustments for bounding boxes.</p>
+</li>
+<li>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_tesseract.py"><code>_tesseract.py</code></a>: Implements the <code>OcrBackend</code> interface using the <code>pytesseract</code> library. It also includes preprocessing steps such as thresholding, grayscale conversion, and channel shifting. These preprocessing steps are designed to improve the accuracy of the OCR results.</p>
+</li>
+<li>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_winrt.py"><code>_winrt.py</code></a>: Implements the <code>OcrBackend</code> interface using the Windows Runtime (WinRT) API for OCR. It runs all winsdk interactions in a background thread to avoid thread mode issues, and uses an async function to perform OCR operations.</p>
+</li>
+<li>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__init__.py"><code>__init__.py</code></a>: Exposes the contents of <code>_screen_ocr.py</code> to the user when importing the <code>screen_ocr</code> package.</p>
+</li>
+<li>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__main__.py"><code>__main__.py</code></a>: Provides a simple command-line interface for the library, allowing users to perform OCR on their screen and print the results to standard output.</p>
+</li>
+</ul>
+<p>These files work together as follows: The <code>Reader</code> class in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_screen_ocr.py"><code>_screen_ocr.py</code></a> acts as the main entry point. It takes a backend (e.g., Tesseract, EasyOCR, etc.) as a constructor argument. The chosen backend is an implementation of the abstract <code>OcrBackend</code> in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>_base.py</code></a>. When the <code>read_screen</code>, <code>read_nearby</code>, or <code>read_image</code> methods of the <code>Reader</code> are called, the appropriate backend implementation is used to perform OCR on the captured image. The <code>ScreenContents</code> class in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_screen_ocr.py"><code>_screen_ocr.py</code></a> then provides methods for accessing and processing the OCR results.</p>
 
 
 
