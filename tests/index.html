@@ -538,20 +538,28 @@
 
 
 <h1 id="tests">tests</h1>
-<p>The <code>screen_ocr/tests</code> directory contains tests for the screen-ocr library. It includes unit tests and utilities for evaluating the performance of OCR models.</p>
-<p>The most important files are:</p>
+<p>The <code>screen_ocr/tests</code> directory contains the tests for the <code>screen_ocr</code> library. These tests are crucial for ensuring the library functions as expected and for demonstrating how to use its various features.</p>
+<p>Here's a breakdown of the key files:</p>
 <ul>
 <li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/screen_ocr_test.py"><code>screen_ocr_test.py</code></a>: This file contains unit tests for the core functionality of the screen-ocr library. The tests focus on validating the <code>ScreenContents</code> class including its ability to find matching suffixes and generate word candidates from OCR results.  These tests use mock <code>OcrResult</code> objects, so they do not test the actual OCR functionality.</p>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/screen_ocr_test.py"><code>screen_ocr_test.py</code></a>: This file contains the core unit tests for the <code>screen_ocr</code> library.  It focuses on testing the functionality of <code>ScreenContents</code>, specifically how it locates text within a screen capture and generates search candidates.</p>
+<ul>
+<li><code>test_find_longest_matching_suffix</code> tests the <code>find_longest_matching_suffix</code> method of the <code>ScreenContents</code> class. This method is used to locate the longest suffix of a search string within the text extracted from a screenshot. It checks that the correct word locations and suffix lengths are returned.</li>
+<li><code>test_generate_candidates_from_line</code> tests the <code>_generate_candidates_from_line</code> method of the <code>ScreenContents</code> class. This method is responsible for breaking down the text extracted from a line of OCR into a list of potential search candidates by splitting on whitespace, camel case, snake case, etc. It verifies that all expected candidates are generated with the correct character offsets and associated data.</li>
+</ul>
 </li>
 <li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils.py"><code>test_utils.py</code></a>: This file provides utility classes and functions used for testing. The <code>OcrEstimator</code> class is particularly important; it allows for the creation of an OCR reader with configurable pre-processing steps for comparing different text extraction pipelines. It also defines a <code>cost</code> function that uses <code>rapidfuzz</code> to compute a similarity score between strings, which is used to evaluate OCR accuracy. The preprocessing steps include thresholding, resizing, grayscaling, and channel shifting.</p>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils.py"><code>test_utils.py</code></a>: This file defines utility classes and functions used in testing the OCR library.</p>
+<ul>
+<li>The <code>cost</code> function calculates a cost based on the partial ratio between the extracted text and ground truth using <code>rapidfuzz</code>. It is used as a scoring function in the scikit-learn estimator to quantify how closely an OCR result matches a target string. This is used to evaluate the performance of various OCR configurations.</li>
+<li>The <code>OcrEstimator</code> class is a scikit-learn compatible estimator that encapsulates the <code>screen_ocr.Reader</code>. It allows training and evaluation of the OCR reader with different preprocessing and backend options. The <code>fit</code> method configures the <code>screen_ocr.Reader</code> using different thresholding techniques such as Otsu, local Otsu, Niblack, and Sauvola. The <code>score</code> method evaluates the reader by calculating the total <code>cost</code> of the OCR results against ground truth text.</li>
+</ul>
 </li>
 <li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils_test.py"><code>test_utils_test.py</code></a>: This file contains unit tests specifically for the utilities defined in <code>test_utils.py</code>. It primarily tests the <code>cost</code> function, ensuring that it correctly calculates similarity between strings.  The <code>setUp</code> method is empty, meaning that each test function is independent.</p>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils_test.py"><code>test_utils_test.py</code></a>: This file contains unit tests specifically for the functions defined in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils.py"><code>test_utils.py</code></a>. It primarily tests the <code>cost</code> function, ensuring that it correctly scores strings based on partial matching using <code>rapidfuzz</code>.</p>
 </li>
 </ul>
-<p>These files work together to ensure that the core screen-ocr functionality is working as expected and that the preprocessing steps of the OCR pipeline can be evaluated. <code>screen_ocr_test.py</code> tests the core logic, while the <code>test_utils</code> files provide tools and metrics for more comprehensive evaluation.</p>
+<p>These test files collectively demonstrate how to test the core functionality of <code>screen_ocr</code> using unit tests and using a scikit-learn compatible interface. They ensure that the library is robust, accurate, and usable.</p>
 
 
 

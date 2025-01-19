@@ -540,35 +540,45 @@
 
 
 <h1 id="screen_ocr">screen_ocr</h1>
-<p>The <code>screen_ocr</code> directory contains the core logic for the screen-ocr library. It provides a way to perform OCR on a screen or a portion of the screen, using different backend OCR engines.</p>
+<p>The <code>screen_ocr</code> directory contains the core logic for the screen-ocr library. It provides an interface for performing OCR on a screen or image, along with implementations for several OCR backends.</p>
 <p>Here's a breakdown of the key files and how they work together:</p>
 <ul>
 <li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>_base.py</code></a>: This file defines the base classes used by the different OCR backend implementations. It includes dataclasses for <code>OcrWord</code>, <code>OcrLine</code>, and <code>OcrResult</code>, as well as the <code>OcrBackend</code> abstract base class with a <code>run_ocr</code> method.</p>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>_base.py</code></a>: This file defines the base classes for the library: <code>OcrWord</code>, <code>OcrLine</code>, <code>OcrResult</code>, and <code>OcrBackend</code>. These classes provide a common interface that different OCR backends can implement. The data classes <code>OcrWord</code>, <code>OcrLine</code>, and <code>OcrResult</code> define the data structure used to store results of OCR, and the <code>OcrBackend</code> abstract class defines the <code>run_ocr</code> method.</p>
 </li>
 <li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_screen_ocr.py"><code>_screen_ocr.py</code></a>: This is the main file for the library. It includes the <code>Reader</code> class, which is used to perform OCR using a selected backend. It also contains the <code>ScreenContents</code> class which stores the results of an OCR operation, and <code>WordLocation</code> class which represents a single word in the <code>ScreenContents</code>. The <code>Reader</code> class provides methods to create readers optimized for either speed or quality, and a generic method to create a <code>Reader</code> with a specified backend. It has methods to read from the screen or an image, and it handles preprocessing of the image before sending it to the backend. It uses fuzzy matching to find words on the screen.</p>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_screen_ocr.py"><code>_screen_ocr.py</code></a>: This file contains the main logic for the library. It defines the <code>Reader</code> class, which is responsible for taking screenshots, preprocessing images, running OCR using a backend, and returning the OCR results in a structured format (<code>ScreenContents</code>). The <code>ScreenContents</code> class contains the OCR results and provides functionality to search for text, extract text, and find locations of words in the image. The <code>Reader</code> class can be created with different backends for different operating systems and desired OCR speed/quality tradeoffs.</p>
+<p>The <code>Reader</code> class provides the following key functionalities:
+*   <code>create_quality_reader</code>: Creates a reader optimized for quality.
+*   <code>create_fast_reader</code>: Creates a reader optimized for speed.
+*   <code>create_reader</code>: Creates a reader with a specified backend.
+*   <code>read_nearby</code>: Reads text from a region surrounding a given coordinate.
+*   <code>read_screen</code>: Reads text from the entire screen.
+*   <code>read_current_window</code>: Reads text from the active window (Talon backend only).
+*   <code>read_image</code>: Reads text from a given image.</p>
+<p>The <code>ScreenContents</code> class provides the following key functionalities:
+*   <code>as_string</code>: Returns the OCR'd text as a single string.
+*  <code>cropped</code>: Returns a new <code>ScreenContents</code> object that is cropped to a given bounding box.
+*  <code>find_nearest_word_coordinates</code>: Returns the coordinates of the nearest instance of a target word, using fuzzy matching.
+*  <code>find_nearest_word</code>: Returns the <code>WordLocation</code> of the nearest instance of a target word, using fuzzy matching.
+*  <code>find_nearest_words</code>: Returns the <code>WordLocation</code>s of the nearest instance of a sequence of target words, using fuzzy matching.
+* <code>find_longest_matching_prefix</code>: Returns the <code>WordLocation</code>s of the longest matching prefix of the target string using fuzzy matching.
+* <code>find_longest_matching_suffix</code>: Returns the <code>WordLocation</code>s of the longest matching suffix of the target string using fuzzy matching.
+* <code>find_matching_words</code>: Returns the <code>WordLocation</code>s of all matching instances of the target string using fuzzy matching.</p>
 </li>
 <li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_easyocr.py"><code>_easyocr.py</code></a>: This file implements the <code>EasyOcrBackend</code>, which uses the <code>easyocr</code> library to perform OCR. It inherits from the <code>OcrBackend</code> class defined in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>_base.py</code></a>. It transforms the output from easyocr into an <code>OcrResult</code>.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_talon.py"><code>_talon.py</code></a>: This file implements the <code>TalonBackend</code>, which uses the OCR capabilities of the Talon voice control system. It inherits from the <code>OcrBackend</code> class defined in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>_base.py</code></a>. It also contains some logic to adjust the bounding boxes of the recognized words to be more accurate.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_tesseract.py"><code>_tesseract.py</code></a>: This file implements the <code>TesseractBackend</code>, which uses the <code>pytesseract</code> library to perform OCR. It inherits from the <code>OcrBackend</code> class defined in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>_base.py</code></a>. It also includes image preprocessing such as thresholding and channel shifting to improve OCR results.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_winrt.py"><code>_winrt.py</code></a>: This file implements the <code>WinRtBackend</code>, which uses the Windows Runtime OCR API. It inherits from the <code>OcrBackend</code> class defined in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>_base.py</code></a>. It runs the OCR on a separate thread because the Windows Runtime API must be used on a thread with a specific mode, which prevents it from running on the main thread.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__init__.py"><code>__init__.py</code></a>: This file makes the classes in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_screen_ocr.py"><code>_screen_ocr.py</code></a> available when the package is imported.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__main__.py"><code>__main__.py</code></a>: This file provides a basic command-line interface for the library. It creates a reader and prints the text on the screen to standard output.</p>
-</li>
+<p>Backend implementations:</p>
+<ul>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_easyocr.py"><code>_easyocr.py</code></a>: Implements the <code>OcrBackend</code> interface using the <code>easyocr</code> library. It initializes <code>easyocr</code> and uses it to run the OCR on a given image.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_talon.py"><code>_talon.py</code></a>: Implements the <code>OcrBackend</code> interface using the Talon's experimental <code>ocr</code> module.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_tesseract.py"><code>_tesseract.py</code></a>: Implements the <code>OcrBackend</code> interface using the <code>pytesseract</code> library, which is a wrapper for the Tesseract OCR engine. The Tesseract backend provides methods for image preprocessing, including thresholding and channel shifting.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_winrt.py"><code>_winrt.py</code></a>: Implements the <code>OcrBackend</code> interface using the Windows Runtime (WinRT) OCR API. This backend is only available on Windows and provides high-quality, fast OCR.</li>
 </ul>
-<p>In summary, the library provides a high-level <code>Reader</code> class that can use a variety of backend OCR engines. The <code>_screen_ocr.py</code> file is the core of the library, with the various <code>_*.py</code> files implementing the different backends.</p>
+</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__init__.py"><code>__init__.py</code></a>: This file makes the classes and functions defined in <code>_screen_ocr.py</code> directly available when the <code>screen_ocr</code> package is imported.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__main__.py"><code>__main__.py</code></a>: This file provides a simple script that can be run to perform OCR on the current screen contents and print the results. This file allows you to quickly test the OCR functionality using the command <code>python -m screen_ocr</code>.</li>
+</ul>
+<p>In summary, the <code>screen_ocr</code> directory provides a flexible and extensible framework for performing screen OCR. The <code>_screen_ocr.py</code> file defines the core logic and interface, while the other files provide different backend implementations. The library can be used to read text from the entire screen, a specific region, or a given image. The library also provides methods for searching, extracting, and finding the location of words on the screen.</p>
 
 
 

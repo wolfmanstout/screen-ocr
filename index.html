@@ -536,68 +536,62 @@
 
 
 <h1 id="screen_ocr">screen_ocr</h1>
-<p>The <code>screen_ocr</code> repository is a Python library that provides functionality for performing Optical Character Recognition (OCR) on screen captures or images. It supports multiple OCR backends, including WinRT (Windows-only), Tesseract (cross-platform), and EasyOCR (experimental). The core logic of the library is in the <code>screen_ocr</code> directory, with tests and utilities in the <code>tests</code> directory. The <code>.github</code> directory contains configuration files for GitHub Actions.</p>
-<p>The library has the following dependencies:</p>
+<p>The <code>screen_ocr</code> repository provides a Python library for performing Optical Character Recognition (OCR) on screen captures or images. It supports multiple backends, including WinRT (Windows only), Tesseract (cross-platform), and EasyOCR (experimental). The library is designed to be extensible, allowing for the addition of new OCR backends.</p>
+<p>The core functionality of the library is in the <a href="screen_ocr/"><code>screen_ocr/screen_ocr</code></a> directory, which exposes a <code>Reader</code> class used to perform OCR, and a <code>ScreenContents</code> class to analyze the output. The <a href="tests/"><code>tests</code></a> directory includes unit tests and a scikit-learn compatible estimator to evaluate the various OCR options.</p>
+<p>The main dependencies are:</p>
 <ul>
-<li><code>pillow</code>: Used for image manipulation and processing.</li>
-<li><code>rapidfuzz</code>: Used for fuzzy string matching when finding words on the screen.</li>
-<li>Optional dependencies:<ul>
-<li><code>numpy</code>, <code>pytesseract</code>, <code>pandas</code>, <code>scikit-image</code>: Used for the Tesseract OCR backend.</li>
-<li><code>winsdk</code>: Used for the WinRT OCR backend.</li>
-<li><code>easyocr</code>, <code>numpy</code>: Used for the EasyOCR backend.</li>
+<li><strong>Pillow</strong>: Used for image processing, such as resizing and format conversion.</li>
+<li><strong>rapidfuzz</strong>: Used for fuzzy string matching when searching for text within the OCR results.</li>
+<li><strong>Optional Dependencies</strong>:<ul>
+<li><strong>numpy</strong>: Required for Tesseract and EasyOCR backends.</li>
+<li><strong>pytesseract</strong>:  Used for the Tesseract OCR backend.</li>
+<li><strong>pandas</strong>: Used by Tesseract backend to load language data.</li>
+<li><strong>scikit-image</strong>: Used by Tesseract backend for image preprocessing.</li>
+<li><strong>winsdk</strong>: Used for the WinRT OCR backend.</li>
+<li><strong>easyocr</strong>: Used for the EasyOCR backend.</li>
+</ul>
+</li>
+<li><strong>Development Dependencies</strong><ul>
+<li><strong>imagehash</strong>: Used in <code>screen_ocr_tool.py</code> to determine near-duplicate images during OCR evaluation.</li>
+<li><strong>pytest</strong>: Used for running unit tests.</li>
+<li><strong>scikit-learn</strong>: Used for creating the <code>OcrEstimator</code> which evaluates OCR performance.</li>
 </ul>
 </li>
 </ul>
-<p>The <code>screen_ocr</code> directory contains the following important files:</p>
+<p>The main components of the repository and how they work together:</p>
 <ul>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>_base.py</code></a>: Defines the base classes for OCR backends including data structures for words and lines of text, and the abstract <code>OcrBackend</code> class.</p>
+<li>The <code>screen_ocr</code> directory contains the core logic of the library.<ul>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>screen_ocr/_base.py</code></a> defines the base classes for the library: <code>OcrWord</code>, <code>OcrLine</code>, <code>OcrResult</code>, and <code>OcrBackend</code>.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_screen_ocr.py"><code>screen_ocr/_screen_ocr.py</code></a> defines the <code>Reader</code> class, which is responsible for taking screenshots, preprocessing images, running OCR using a backend, and returning the results as a <code>ScreenContents</code> object. The <code>ScreenContents</code> class provides methods for searching, extracting, and locating words in the screen capture.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_easyocr.py"><code>screen_ocr/_easyocr.py</code></a>, <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_talon.py"><code>screen_ocr/_talon.py</code></a>, <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_tesseract.py"><code>screen_ocr/_tesseract.py</code></a>, and <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_winrt.py"><code>screen_ocr/_winrt.py</code></a> implement the <code>OcrBackend</code> interface using different OCR engines.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__init__.py"><code>screen_ocr/__init__.py</code></a> makes the library's core classes available directly from the <code>screen_ocr</code> package.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__main__.py"><code>screen_ocr/__main__.py</code></a> provides a command-line interface to perform OCR on the current screen.</li>
+</ul>
 </li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_screen_ocr.py"><code>_screen_ocr.py</code></a>: The primary file that defines the <code>Reader</code> class which is used to perform OCR using different backends, and the <code>ScreenContents</code> class which stores the results of an OCR operation.</p>
+<li>The <a href="tests/"><code>tests</code></a> directory contains tests for the <code>screen_ocr</code> library.<ul>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/screen_ocr_test.py"><code>tests/screen_ocr_test.py</code></a> contains unit tests for the <code>ScreenContents</code> class, ensuring that text searching and candidate generation work as expected.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils.py"><code>tests/test_utils.py</code></a> defines utility functions for testing, including a <code>cost</code> function that calculates how well an OCR result matches a target string, and an <code>OcrEstimator</code> class that allows training and evaluation of the OCR reader with different preprocessing and backend options.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils_test.py"><code>tests/test_utils_test.py</code></a> contains unit tests for the <code>cost</code> function defined in <code>test_utils.py</code>.</li>
+</ul>
 </li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_easyocr.py"><code>_easyocr.py</code></a>: Implements the <code>EasyOcrBackend</code> using the <code>easyocr</code> library.</p>
+<li>The <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr_tool.py"><code>screen_ocr_tool.py</code></a> script is used for debugging and evaluating OCR performance, by running OCR on a set of images and comparing the result to a ground truth text file.</li>
+<li>The <a href="_github/"><code>.github</code></a> directory contains GitHub workflow configurations.<ul>
+<li>The <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/.github/workflows/deploy_repo_guide.yml"><code>deploy_repo_guide.yml</code></a> workflow is used to deploy documentation generated by <code>repo-guide</code>.</li>
+</ul>
 </li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_talon.py"><code>_talon.py</code></a>: Implements the <code>TalonBackend</code> using the Talon voice control system's OCR capabilities.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_tesseract.py"><code>_tesseract.py</code></a>: Implements the <code>TesseractBackend</code> using the <code>pytesseract</code> library.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_winrt.py"><code>_winrt.py</code></a>: Implements the <code>WinRtBackend</code> using the Windows Runtime OCR API.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__init__.py"><code>__init__.py</code></a>: Makes classes available when the package is imported.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/__main__.py"><code>__main__.py</code></a>: Provides a basic command-line interface for running OCR.</p>
+<li>Other files in the repository:<ul>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/.git-blame-ignore-revs"><code>.git-blame-ignore-revs</code></a> specifies revisions to ignore when using <code>git blame</code>.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/.gitattributes"><code>.gitattributes</code></a> specifies how line endings should be handled by git.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/.gitignore"><code>.gitignore</code></a> specifies files that should not be tracked by git.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/.pre-commit-config.yaml"><code>.pre-commit-config.yaml</code></a> configures pre-commit hooks that format code with ruff.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/.python-version"><code>.python-version</code></a> specifies the Python version used for development.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/LICENSE"><code>LICENSE</code></a> contains the Apache License version 2.0.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/pyproject.toml"><code>pyproject.toml</code></a> defines project metadata and build system requirements.</li>
+<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/README.md"><code>README.md</code></a> provides basic information about the library.</li>
+</ul>
 </li>
 </ul>
-<p>The <code>tests</code> directory contains the following important files:</p>
-<ul>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/screen_ocr_test.py"><code>screen_ocr_test.py</code></a>: Contains unit tests for the core functionality of the screen-ocr library.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils.py"><code>test_utils.py</code></a>: Provides utility classes and functions for testing, including the <code>OcrEstimator</code> class for comparing different text extraction pipelines.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils_test.py"><code>test_utils_test.py</code></a>: Contains unit tests for the utilities defined in <code>test_utils.py</code>.</p>
-</li>
-</ul>
-<p>The <code>.github</code> directory contains workflow configuration for GitHub Actions:</p>
-<ul>
-<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/.github/workflows/deploy_repo_guide.yml"><code>deploy_repo_guide.yml</code></a>: A workflow that publishes documentation generated by the <code>repo-guide</code> tool.</li>
-</ul>
-<p>Other important files in the repository:</p>
-<ul>
-<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/pyproject.toml"><code>pyproject.toml</code></a>: Defines the project metadata and dependencies.</li>
-<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/README.md"><code>README.md</code></a>: Provides a high-level overview of the library, installation instructions, and basic usage examples.</li>
-<li><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr_tool.py"><code>screen_ocr_tool.py</code></a>: A tool for debugging and grid searching different OCR configurations.</li>
-</ul>
-<p>The library is structured to allow for easy extension with additional OCR backends by implementing a class that inherits from the <code>OcrBackend</code> abstract base class defined in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_base.py"><code>_base.py</code></a>. The main use case of the <code>Reader</code> class in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/screen_ocr/_screen_ocr.py"><code>_screen_ocr.py</code></a> is to handle preprocessing steps such as resizing and converting images to grayscale.</p>
+<p>In summary, the <code>screen_ocr</code> repository provides a modular and flexible library for performing screen OCR with several backend options, extensive unit tests and evaluation capabilities, and GitHub Actions for documentation deployment.</p>
 
 
 
