@@ -538,23 +538,26 @@
 
 
 <h1 id="tests">tests</h1>
-<p>The <code>screen_ocr/tests</code> directory contains tests for the screen-ocr library. It includes unit tests and utilities for testing OCR functionality.</p>
+<p>The <code>screen_ocr/tests</code> directory contains tests for the <code>screen_ocr</code> library. It includes unit tests for core functionality as well as utilities for evaluating OCR performance.</p>
 <ul>
 <li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/screen_ocr_test.py"><code>screen_ocr_test.py</code></a> contains unit tests for the <code>screen_ocr</code> module. It primarily tests the <code>ScreenContents</code> class, focusing on its ability to find the longest matching suffix of a string within the OCR results, and to generate a list of candidate words to search for based on the text in OCR result lines.</p>
-</li>
-<li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils.py"><code>test_utils.py</code></a> provides utility functions and classes for testing.</p>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/screen_ocr_test.py"><code>screen_ocr_test.py</code></a>: This file contains unit tests for the <code>screen_ocr</code> library. It includes tests for:</p>
 <ul>
-<li>The <code>cost</code> function calculates a cost (negative partial ratio) between a result string and a ground truth string, used to compare the quality of OCR results.</li>
-<li>The <code>OcrEstimator</code> class is a scikit-learn compatible estimator used to evaluate different OCR configurations. It takes parameters that are passed through to the <code>screen_ocr.Reader.create_reader</code> function such as thresholding parameters. The estimator can be used to perform hyperparameter optimization of the OCR system via a scikit-learn method such as <code>GridSearchCV</code>. It uses the <code>cost</code> function when evaluating performance of different parameter sets.</li>
+<li><code>ScreenContents.find_longest_matching_suffix</code>, which is used to find the longest matching suffix of a string within the OCR results. This functionality is used for locating words and phrases on the screen, even if the OCR text does not exactly match the target string.</li>
+<li><code>ScreenContents._generate_candidates_from_line</code>, which generates word location candidates from an OCR line. These candidates are used for fuzzy matching of text.</li>
 </ul>
 </li>
 <li>
-<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils_test.py"><code>test_utils_test.py</code></a> contains unit tests for the utilities in <code>test_utils.py</code>, specifically for the <code>cost</code> function. These tests verify that the <code>cost</code> function correctly identifies closer matches between strings.</p>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils.py"><code>test_utils.py</code></a>: This file provides utility classes and functions for testing the OCR functionality. It includes:</p>
+<ul>
+<li>A <code>cost</code> function that calculates the negative partial ratio between a result and ground truth text, using the <code>rapidfuzz</code> library. The negative is used because the <code>scikit-learn</code> <code>score</code> function uses a higher score for a better result.</li>
+<li>An <code>OcrEstimator</code> class which is a scikit-learn compatible estimator for different preprocessing and OCR configurations. This estimator allows for automated testing of hyperparameter settings. The <code>fit</code> method creates a <code>screen_ocr.Reader</code> with the provided settings, and the <code>score</code> method reads text from a list of images, calculates the cost for each result, and returns the negative of the sum of those costs.</li>
+</ul>
+</li>
+<li>
+<p><a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils_test.py"><code>test_utils_test.py</code></a>: This file contains unit tests for the utilities in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils.py"><code>test_utils.py</code></a>. It includes tests for the <code>cost</code> function.</p>
 </li>
 </ul>
-<p>These files work together to ensure the quality of the screen-ocr library. The unit tests in <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/screen_ocr_test.py"><code>screen_ocr_test.py</code></a> verify the core functionality of the OCR processing, while the utility functions and tests in <code>test_utils</code> and <a href="https://github.com/wolfmanstout/screen-ocr/blob/master/tests/test_utils_test.py"><code>test_utils_test.py</code></a> provide a framework for evaluating and optimizing OCR performance.</p>
 
 
 
