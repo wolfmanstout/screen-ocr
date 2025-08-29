@@ -890,7 +890,7 @@ wheels = [
 
 [[package]]
 name = "screen-ocr"
-version = "0.5.0"
+version = "0.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "dxcam", marker = "sys_platform == 'win32'" },
