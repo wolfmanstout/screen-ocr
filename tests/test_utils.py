@@ -9,6 +9,12 @@ def cost(result, gt):
     return -fuzz.partial_ratio(result.lower(), gt.lower())
 
 
+# NOTE: This estimator is currently broken: fit() always forwards
+# label_components to Reader.create_reader, which no longer accepts it, so it
+# raises TypeError. Several defaults also no longer work when left unset (e.g.
+# resize_factor=None breaks Reader._preprocess, and convert_grayscale=None
+# trips an assertion for the tesseract backend). Fix these before using the
+# grid_search mode of screen_ocr_tool.py.
 class OcrEstimator(BaseEstimator):
     def __init__(
         self,
