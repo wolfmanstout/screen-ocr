@@ -1,1 +1,1 @@
-from ._screen_ocr import *  # noqa: F403
+from ._screen_ocr import *
